@@ -77,13 +77,16 @@ data Maybe (a : Set) : Set where
 --Show that the Vec a n type is applicative
 
 pure : {n : Nat} {a : Set} -> a -> Vec a n
-pure = {!!}
+pure {Zero} x = Nil
+pure {Succ n} x = Cons x (pure x)
 
 _<*>_ : {a b : Set} {n : Nat} -> Vec (a -> b) n -> Vec a n -> Vec b n
-_<*>_ = {!!}
+_<*>_ Nil Nil = Nil
+_<*>_ (Cons f xs) (Cons y ys) = Cons (f y) (xs <*> ys)
 
 vmap : {a b : Set} {n : Nat} -> (a -> b) -> Vec a n -> Vec b n
-vmap = {!!}
+vmap f Nil = Nil
+vmap f (Cons x xs) = Cons (f x) (vmap f xs)  
 
 ----------------------
 ----- Exercise 2 -----
@@ -95,17 +98,36 @@ vmap = {!!}
 Matrix : Set -> Nat -> Nat -> Set
 Matrix a n m = Vec (Vec a n) m 
 
--- Define matrix addition
 madd : {n m : Nat} -> Matrix Nat m n -> Matrix Nat m n -> Matrix Nat m n
-madd xss yss = {!!}
+madd Nil Nil = Nil
+madd (Cons xs xss) (Cons ys yss) = Cons (vmap _+_  xs <*> ys) (madd xss yss)
+
+mmul : {n m  : Nat} -> Matrix Nat m n -> Matrix Nat m n -> Matrix Nat m n
+mmul Nil Nil = Nil
+mmul (Cons  xs xss) (Cons ys yss) = Cons (vmap  _*_  xs <*> ys) (mmul xss yss)
 
 -- Define the identity matrix
 idMatrix : {n : Nat} -> Matrix Nat n n
-idMatrix = {!!}
+idMatrix {Zero} = Nil
+idMatrix {Succ _} = pure (pure 1)
+
+headMatrix : {n m : Nat} -> {a : Set} -> Matrix a (Succ n) m -> Vec a m
+headMatrix {_} {Zero} Nil = Nil
+headMatrix {_} {Succ _} (Cons (Cons x xs) xss) = Cons x (headMatrix xss)
+
+tailMatrix : {n m : Nat} -> {a : Set} -> Matrix a (Succ n) m -> Matrix a n m
+tailMatrix {_} {Zero} Nil = Nil
+tailMatrix {_} {Succ _} (Cons (Cons x xs) xss) = Cons xs (tailMatrix xss)
 
 -- Define matrix transposition
 transpose : {n m : Nat} {a : Set} -> Matrix a m n -> Matrix a n m
-transpose = {!!}
+transpose {Zero} {Zero} Nil = Nil
+transpose {Zero} {Succ _} Nil = pure Nil
+transpose {Succ _} {Zero} (Cons Nil xs) = Nil
+transpose {Succ Zero} {Succ _} (Cons (Cons x xs) Nil) = Cons  (Cons x Nil) (transpose (Cons xs Nil))
+transpose {Succ (Succ _)} {Succ _} (Cons (Cons x xs) yss) = Cons (Cons x (headMatrix yss)) (transpose (Cons xs (tailMatrix yss)))
+
+
   
 ----------------------
 ----- Exercise 3 -----
@@ -115,21 +137,27 @@ transpose = {!!}
 
 -- The result of "plan {n}" should be a vector of length n storing all
 -- the inhabitants of Fin n in increasing order.
+-- The result of "plan {n}" should be a vector of length n storing all
+-- the inhabitants of Fin n in increasing order.
 plan : {n : Nat} -> Vec (Fin n) n
-plan = {!!}
+plan {Zero} = Nil
+plan {Succ _} =  pure Fz
 
 -- Define a forgetful map, mapping Fin to Nat
 forget : {n : Nat} -> Fin n -> Nat
-forget = {!!}
+forget Fz = Zero
+forget (Fs n) = forget n
 
 -- There are several ways to embed Fin n in Fin (Succ n).  Try to come
 -- up with one that satisfies the correctness property below (and
 -- prove that it does).
 embed : {n : Nat} -> Fin n -> Fin (Succ n)
-embed = {!!}
+embed Fz = Fs Fz
+embed (Fs n) = Fs (Fs n)
 
 correct : {n : Nat} -> (i : Fin n) -> forget i == forget (embed i)
-correct = {!!}
+correct Fz = Refl
+correct (Fs n) = Refl
 
 ----------------------
 ----- Exercise 4 -----
@@ -143,13 +171,26 @@ data Compare : Nat -> Nat -> Set where
   GreaterThan : forall {n} k -> Compare (n + Succ k) n
 
 -- Show that there is a 'covering function'
-cmp : (n m : Nat) -> Compare n m 
-cmp = {!!}
+cmp : (n m : Nat) -> Compare n m
+cmp Zero Zero = Equal
+cmp (Succ n) Zero = GreaterThan n
+cmp Zero (Succ m) = LessThan m
+cmp (Succ n) (Succ m) with cmp n m
+cmp (Succ n) (Succ .(n + Succ k)) | LessThan k = LessThan k
+cmp (Succ n) (Succ .n) | Equal = Equal
+cmp (Succ .(m + Succ k)) (Succ m) | GreaterThan k = GreaterThan k
+
 
 -- Use the cmp function you defined above to define the absolute
 -- difference between two natural numbers.
 difference : (n m : Nat) -> Nat
-difference = {!!}
+difference Zero Zero = Zero
+difference (Succ n) Zero = Succ n
+difference Zero (Succ m) = Succ m
+difference (Succ n) (Succ m) with cmp n m
+difference (Succ n) (Succ .(n + Succ k)) | LessThan k = k
+difference (Succ n) (Succ .n) | Equal = Zero
+difference (Succ .(m + Succ k)) (Succ m) | GreaterThan k = k
 
 ----------------------
 ----- Exercise 5 -----
