@@ -207,17 +207,10 @@ sym Refl = Refl
 trans : {a : Set} {x y z : a} -> x == y -> y == z -> x == z
 trans Refl Refl = Refl
 
-infixr 2 _⟨_⟩_
-_⟨_⟩_ : (x : Nat) -> {y z : Nat} -> (x == y) -> (y == z) -> x == z
-x ⟨ p ⟩ q = trans p q
-
-_■ : (x : Nat) -> x == x
-_■ x = Refl
 
 plusZero : (n : Nat) -> (n + 0) == n
 plusZero Zero = Refl
 plusZero (Succ n) = cong Succ (plusZero n)
---plusZero (Succ n) = cong Succ (plusZero n)
 
 plusSucc : (n m : Nat) -> Succ (n + m) == (n + Succ m)
 plusSucc Zero Zero = Refl
@@ -230,14 +223,40 @@ plusCommutes Zero (Succ m) = cong Succ (plusCommutes Zero m)
 plusCommutes n Zero = plusZero n
 plusCommutes n (Succ m) = trans (sym (plusSucc n m)) (cong Succ (plusCommutes n m))
 
-{-
+assoc' : (n m k : Nat) -> ((n + m) + k) == (n + (m + k))
+assoc' Zero m k = Refl
+assoc' (Succ n) m k = cong Succ (assoc' n m k)
+
+assoc : (n m k : Nat) -> (n + (m + k)) == ((n + m) + k)
+assoc Zero m k = Refl
+assoc (Succ n) m k = cong Succ (assoc n m k)
+
 distributivity : (n m k : Nat) -> (n * (m + k)) == ((n * m) + (n * k))
-distributivity Zero Zero Zero = Refl
-distributivity Zero Zero (Succ k) = Refl
-distributivity Zero (Succ m) k = Refl
-distributivity (Succ n) Zero = {!!}
-distributivity (Succ n) (Succ m) Zero = {!!}
-distributivity (Succ n) (Succ m) (Succ k) = {!!} 
+distributivity Zero Zero k = Refl
+distributivity Zero (Succ m) Zero = Refl
+distributivity Zero (Succ m) (Succ k) = Refl
+distributivity (Succ n) m k = {!!}
+{-
+from AFP:
+distributivity : (n m k : Nat) -> (n * (m + k)) == ((n * m) + (n * k))
+distributivity Zero m k = Refl
+distributivity (Succ n) m k =
+                Succ n  * (m + k)
+                  ⟨ cong (_+_ (m + k)) (distributivity n m k) ⟩
+               (m + k) + ((n * m) + (n * k))
+                  ⟨ cong (\ x -> x) (assoc (m + k) (n * m) (n * k)) ⟩
+              ((m + k) + (n * m)) + (n * k)
+                  ⟨ cong (\x -> (x + (n * m)) + (n * k)) (plusCommutes m k) ⟩
+              ((k + m) + ( n * m)) + (n * k)
+                  ⟨ cong (\x -> x + (n * k)) (assoc' k m (n * m)) ⟩
+              (k + (m + (n * m))) + (n * k)
+                 ⟨ cong (\x -> x + (n * k)) (plusCommutes k (m + (n * m))) ⟩
+              ((m + (n * m)) + k) + (n * k)
+                 ⟨ cong (\x -> x) (assoc' (m + (n * m)) k (n * k)) ⟩
+              (m + (n * m)) + (k + (n * k))
+                ⟨ Refl ⟩
+              ((Succ n * m) + (Succ n * k))
+                ■
 -}
 ----------------------
 ----- Exercise 6 -----
@@ -435,7 +454,9 @@ compile (Val x) = PUSH x HALT
 
 -- And prove your compiler correct
 correctness : (e : Expr) (s : Stack) -> Cons (eval e) s == exec (compile e) s
-correctness (Add e1 e2) s = {!!}
+correctness (Add e1 e2) s with exec (compile (Add e1 e2)) s
+correctness (Add e1 e2) s | Nil = {!!}
+correctness (Add e1 e2) s | Cons x t = {!!}
 correctness (Val x) Nil = Refl
 correctness (Val x) (Cons y ys) = {!!}
 
