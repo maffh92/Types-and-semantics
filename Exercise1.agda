@@ -2,7 +2,7 @@ module Exercise1 where
 
 {- Instruction: Fill in all the missing definitions. In most cases,
 the type signature enforces that there should be a single unique
-definition that fits. 
+definition that fits.
 
 If you have any questions, don't hesitate to email me or ask in class.
 -}
@@ -17,7 +17,7 @@ data Bool : Set where
   False : Bool
 
 data Nat : Set where
-  Zero : Nat 
+  Zero : Nat
   Succ : Nat -> Nat
 
 {-# BUILTIN NATURAL Nat #-}
@@ -25,6 +25,7 @@ data Nat : Set where
 _+_ : Nat -> Nat -> Nat
 Zero + m = m
 Succ k + m = Succ (k + m)
+
 
 _*_ : Nat -> Nat -> Nat
 Zero * n = Zero
@@ -86,7 +87,7 @@ _<*>_ (Cons f xs) (Cons y ys) = Cons (f y) (xs <*> ys)
 
 vmap : {a b : Set} {n : Nat} -> (a -> b) -> Vec a n -> Vec b n
 vmap f Nil = Nil
-vmap f (Cons x xs) = Cons (f x) (vmap f xs)  
+vmap f (Cons x xs) = Cons (f x) (vmap f xs)
 
 ----------------------
 ----- Exercise 2 -----
@@ -96,7 +97,7 @@ vmap f (Cons x xs) = Cons (f x) (vmap f xs)
 -- matrix addition; the identity matrix; and matrix transposition.
 
 Matrix : Set -> Nat -> Nat -> Set
-Matrix a n m = Vec (Vec a n) m 
+Matrix a n m = Vec (Vec a n) m
 
 madd : {n m : Nat} -> Matrix Nat m n -> Matrix Nat m n -> Matrix Nat m n
 madd Nil Nil = Nil
@@ -128,7 +129,7 @@ transpose {Succ Zero} {Succ _} (Cons (Cons x xs) Nil) = Cons  (Cons x Nil) (tran
 transpose {Succ (Succ _)} {Succ _} (Cons (Cons x xs) yss) = Cons (Cons x (headMatrix yss)) (transpose (Cons xs (tailMatrix yss)))
 
 
-  
+
 ----------------------
 ----- Exercise 3 -----
 ----------------------
@@ -164,6 +165,7 @@ correct (Fs n) = Refl
 ----------------------
 
 -- Given the following data type definition:
+
 
 data Compare : Nat -> Nat -> Set where
   LessThan : forall {n} k -> Compare n (n + Succ k)
@@ -205,57 +207,100 @@ sym Refl = Refl
 trans : {a : Set} {x y z : a} -> x == y -> y == z -> x == z
 trans Refl Refl = Refl
 
+infixr 2 _⟨_⟩_
+_⟨_⟩_ : (x : Nat) -> {y z : Nat} -> (x == y) -> (y == z) -> x == z
+x ⟨ p ⟩ q = trans p q
+
+_■ : (x : Nat) -> x == x
+_■ x = Refl
+
 plusZero : (n : Nat) -> (n + 0) == n
-plusZero = {!!}
+plusZero Zero = Refl
+plusZero (Succ n) = cong Succ (plusZero n)
+--plusZero (Succ n) = cong Succ (plusZero n)
 
 plusSucc : (n m : Nat) -> Succ (n + m) == (n + Succ m)
-plusSucc = {!!}
+plusSucc Zero Zero = Refl
+plusSucc Zero (Succ m) = Refl
+plusSucc (Succ n) m = cong Succ (plusSucc n m)
 
 plusCommutes : (n m : Nat) -> (n + m) == (m + n)
-plusCommutes = {!!}
+plusCommutes Zero Zero = Refl
+plusCommutes Zero (Succ m) = cong Succ (plusCommutes Zero m)
+plusCommutes n Zero = plusZero n
+plusCommutes n (Succ m) = trans (sym (plusSucc n m)) (cong Succ (plusCommutes n m))
 
+{-
 distributivity : (n m k : Nat) -> (n * (m + k)) == ((n * m) + (n * k))
-distributivity = {!!}
-
+distributivity Zero Zero Zero = Refl
+distributivity Zero Zero (Succ k) = Refl
+distributivity Zero (Succ m) k = Refl
+distributivity (Succ n) Zero = {!!}
+distributivity (Succ n) (Succ m) Zero = {!!}
+distributivity (Succ n) (Succ m) (Succ k) = {!!} 
+-}
 ----------------------
 ----- Exercise 6 -----
 ----------------------
 
 -- Prove that the sublist relation defined below is transitive and reflexive.
-
 data SubList {a : Set} : List a -> List a -> Set where
   Base : SubList Nil Nil
   Keep : forall {x xs ys} -> SubList xs ys -> SubList (Cons x xs) (Cons x ys)
   Drop : forall {y zs ys} -> SubList zs ys -> SubList zs (Cons y ys)
 
 SubListRefl : {a : Set} {xs : List a} -> SubList xs xs
-SubListRefl = {!!}
+SubListRefl {_} {Nil} = Base
+SubListRefl {_} {Cons x xs} = Keep SubListRefl
 
 SubListTrans : {a : Set} {xs ys zs : List a} -> SubList xs ys -> SubList ys zs -> SubList xs zs
-SubListTrans = {!!}
+SubListTrans Base Base = Base
+SubListTrans Base (Drop x) = Drop x
+SubListTrans (Keep x) (Keep y) = Keep (SubListTrans x y)
+SubListTrans (Keep x) (Drop y) = Drop (SubListTrans (Keep x) y)
+SubListTrans (Drop x) (Keep y) = Drop (SubListTrans x y) --How is this correct?
+SubListTrans (Drop x) (Drop y) = Drop (SubListTrans (Drop x) y)
+
+SubListSubset : {a : Set} {x : a} {xs ys : List a} -> SubList (Cons x xs) ys -> SubList xs ys
+SubListSubset l = SubListTrans (Drop SubListRefl) l
+
+SubListEmpty : {a : Set} {x : a} {xs : List a} -> SubList (Cons x xs) xs -> Empty
+SubListEmpty (Keep l) = SubListEmpty l
+SubListEmpty (Drop r) = SubListEmpty (SubListSubset r)
 
 SubListAntiSym : {a : Set} {xs ys : List a} ->  SubList xs ys -> SubList ys xs -> xs == ys
-SubListAntiSym = {!!}
+SubListAntiSym  Base Base = Refl
+SubListAntiSym {_} {Cons x xs} (Keep n) (Keep m) = cong (Cons x) (SubListAntiSym n m)
+SubListAntiSym {_} {Cons x xs} (Keep n) (Drop m) = cong (Cons x) (SubListAntiSym n (SubListSubset m))
+SubListAntiSym {_} {Cons x xs} (Drop n) (Keep m) = cong (Cons x)  (SubListAntiSym (SubListSubset n) m)
+SubListAntiSym {_} {Cons x xs} (Drop n) (Drop m) with SubListEmpty (SubListTrans n (SubListSubset m))
+SubListAntiSym {a} {Cons x xs} (Drop n) (Drop m) | ()
 
 
 ----------------------
 ----- Exercise 7 -----
 ----------------------
 
--- Define the constructors of a data type 
+-- Define the constructors of a data type
 data LEQ : Nat -> Nat -> Set where
+  Step : {n m : Nat} →  LEQ n  m → LEQ (Succ n) (Succ m) 
+  Base : ∀ {n} → LEQ Zero n 
 
 -- (Alternative correct definitions exist - this one is the easiest to
 -- work with for the rest of this exercise)
 
 leqRefl : (n : Nat) -> LEQ n n
-leqRefl = {!!}
+leqRefl Zero = Base
+leqRefl (Succ n) = Step (leqRefl n)
 
 leqTrans : {n m k : Nat} -> LEQ n m -> LEQ m k -> LEQ n k
-leqTrans = {!!}
+leqTrans (Step x) (Step y) = Step (leqTrans x y)
+leqTrans Base (Step y) = Base
+leqTrans Base Base = Base
 
 leqAntiSym : {n m : Nat} -> LEQ n m -> LEQ m n -> n == m
-leqAntiSym = {!!}
+leqAntiSym (Step x) (Step y) = cong Succ (leqAntiSym x y)
+leqAntiSym Base Base = Refl
 
 -- Given the following function:
 _<=_ : Nat -> Nat -> Bool
@@ -266,13 +311,17 @@ Succ x <= Succ y = x <= y
 -- Now show that this function behaves as the LEQ data type
 
 leq<= : {n m : Nat} -> LEQ n m -> (n <= m) == True
-leq<= = {!!}
+leq<= (Step x) = leq<= x
+leq<= Base = Refl
 
 <=leq : (n m : Nat) -> (n <= m) == True -> LEQ n m
-<=leq = {!!} 
+<=leq Zero Zero Refl = Base
+<=leq Zero (Succ m) Refl = Base
+<=leq (Succ n) Zero ()
+<=leq (Succ n) (Succ m) x = Step (<=leq n m x)
 
 ----------------------
------ Exercise 7 -----
+----- Exercise 8 -----
 ----------------------
 
 -- We can define negation as follows
@@ -283,7 +332,7 @@ Not P = P -> Empty
 -- familiar with from classical logic do not hold.
 
 notNotP : {P : Set} -> P -> Not (Not P)
-notNotP = {!!}
+notNotP x y = y x
 
 -- The reverse does not hold: Not (Not P) does not imply P
 
@@ -299,7 +348,7 @@ orCase f g (Inl x) = f x
 orCase f g (Inr x) = g x
 
 notNotExcludedMiddle : {P : Set} -> Not (Not (Or P (Not P)))
-notNotExcludedMiddle = {!!} 
+notNotExcludedMiddle x = x (Inr (λ y → x (Inl y)))
 
 -- There are various different axioms that can be added to a
 -- constructive logic to get the more familiar classical logic.
@@ -315,13 +364,17 @@ impliesToOr = {P Q : Set} -> (P -> Q) -> Or (Not P) Q
 
 
 step1 : doubleNegation -> excludedMiddle
-step1 dn = {!!} 
+step1 dn = dn notNotExcludedMiddle
+
 
 step2 : excludedMiddle -> impliesToOr
-step2 = {!!}
+step2 em {P} {Q} ito with em {P}
+step2 em ito | Inl x₁ = Inr (ito x₁)
+step2 em ito | Inr x₁ = Inl x₁
+ 
 
 step3 : impliesToOr -> doubleNegation
-step3  ito {P} h = {!!}
+step3  ito {P} h = orCase (λ z → magic (h z) ) (λ z → z) (ito (λ z → z))
 
 -- HARDER: show that these are equivalent to Pierces law:
 piercesLaw = {P Q : Set} -> ((P -> Q) -> P) -> P
@@ -344,28 +397,47 @@ eval (Val x) = x
 -- We can also compile such expressions to stack machine code
 data Cmd : Set where
   -- stop execution and return the current stack
-  HALT : Cmd 
-  -- push a new number on the stack
-  PUSH : Nat -> Cmd -> Cmd 
+  HALT : Cmd
+  -- push a new number on the  stack
+  PUSH : Nat -> Cmd -> Cmd
   -- replace the top two elements of the stack with their sum
   ADD : Cmd -> Cmd
+  COMBINE : Cmd → Cmd → Cmd
 
 Stack : Set
 Stack = List Nat
+
+addExec : Nat -> Stack -> Stack
+addExec x Nil = Cons x Nil
+addExec x (Cons y st) = Cons (x + y) st
 
 -- Complete the following definition, executing a list of instructions
 -- Note: there 'obvious' definition is not total -- how can you fix
 -- things so that it is?
 exec : Cmd -> Stack -> Stack
-exec c = {!!}
+exec HALT st = st
+exec (PUSH x c) st = exec c (Cons x st)
+exec (ADD c) Nil = exec c Nil
+exec (ADD c) (Cons x st) = exec c (addExec x st)
+exec (COMBINE e1 e2) st  with exec e2 (exec e1 st)
+exec (COMBINE e1 e2) st | Nil = st
+exec (COMBINE e1 e2) st | Cons x Nil = Cons x Nil
+exec (COMBINE e1 e2) st | Cons x (Cons y ys) = Cons (x + y) ys
+
+map : {A B : Set} {n : Nat} -> (A -> B) →  Vec A n → Vec B n
+map f Nil = Nil
+map f (Cons x xs) = Cons (f x) (map f xs)  
 
 -- Define a compiler from expresions to instructions
 compile : Expr -> Cmd
-compile e = {!!}
+compile (Add e1 e2) = COMBINE (compile e1) (compile e2)
+compile (Val x) = PUSH x HALT
 
 -- And prove your compiler correct
 correctness : (e : Expr) (s : Stack) -> Cons (eval e) s == exec (compile e) s
-correctness e = {!!}
+correctness (Add e1 e2) s = {!!}
+correctness (Val x) Nil = Refl
+correctness (Val x) (Cons y ys) = {!!}
 
 --BONUS exercises: extend the language with new constructs for let
 --bindings, variables, new operators, mutable references, assignment,
