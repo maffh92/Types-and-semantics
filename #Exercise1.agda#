@@ -458,7 +458,7 @@ compile (Val x) = PUSH x HALT
 -- And prove your compiler correct
 correctness : (e : Expr) (s : Stack) -> Cons (eval e) s == exec (compile e) s
 correctness (Add e1 e2) s with exec (compile (Add e1 e2)) s
-correctness (Add e1 e2) s | Nil = {!!}
+correctness (Add e1 e2) s | Nil = {!!}1
 correctness (Add e1 e2) s | Cons x t = {!!}
 correctness (Val x) Nil = Refl
 correctness (Val x) (Cons y ys) = {!!}
