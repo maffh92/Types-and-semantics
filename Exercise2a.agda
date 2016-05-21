@@ -288,22 +288,76 @@ uniqueness-of-normal-forms t t₁ t₂ (Cons x step₁) (Cons x₁ step₂) nf1 
 
 -- Define an equivalent big step semantics
 data _⇓_ : {ty : Type} -> Term ty → Value ty → Set where
-   
+  B-Zero : zero ⇓ vnat Zero
+  B-True : true ⇓ vtrue
+  B-False : false ⇓ vfalse
+  B-Succ : ∀ {t : Term NAT} {v : Nat} → t ⇓ vnat v → succ t ⇓ vnat (Succ v)
+  B-IfTrue : ∀ {t₁ t₂ t₃ : Term BOOL} {v₁ v₂ v₃ : Value _ } → t₁ ⇓ vtrue → t₂ ⇓ v₂ → (if t₁ then t₂ else t₃) ⇓ v₂  
+  B-IfFalse :  ∀ {t₁ t₂ t₃ : Term BOOL} {v₁ v₂ v₃ : Value _ } → t₁ ⇓ vfalse → t₃ ⇓ v₃ → (if t₁ then t₂ else t₃) ⇓ v₃
+  B-IsZeroZero : {t₁ : Term NAT} → t₁ ⇓ vnat Zero → iszero t₁ ⇓ vtrue 
+  B-IsZeroSucc : {t : Term NAT} {v : Nat} → t ⇓ vnat (Succ v) → iszero t ⇓ vfalse
+
 -- Show how to convert from big step to small step semantics
+succStep : ∀ {t₁ t₂ : Term NAT} → Steps t₁ t₂ → Steps (succ t₁) (succ t₂)
+succStep Nil = Nil
+succStep (Cons x xs) = Cons (E-Succ x) (succStep xs)
+
+isZeroStep : ∀ {t₁ t₂ : Term NAT} → Steps t₁ t₂ → Steps (iszero t₁) (iszero t₂)
+isZeroStep Nil = Nil
+isZeroStep (Cons x xs) = Cons (E-IsZero x) (isZeroStep xs)
+
+
+
+ifStep : ∀ {ty} {t t'} {t₁ t₂ : Term ty} → Steps t t' → Steps (if t then t₁ else t₂) (if t' then t₁ else t₂)
+ifStep Nil = Nil
+ifStep (Cons x xs) = Cons (E-If-If x) (ifStep xs)
+
 big-to-small : ∀ {ty} {t : Term ty} {v : Value ty} → t ⇓ v → Steps t ⌜ v ⌝
-big-to-small = {!!}
+big-to-small B-Zero = Nil
+big-to-small B-True = Nil
+big-to-small B-False = Nil
+big-to-small (B-Succ x) = succStep (big-to-small x)
+big-to-small (B-IfTrue x x₁) = (ifStep (big-to-small x)) ++ Cons E-If-True (big-to-small x₁)
+big-to-small (B-IfFalse x x₁) = (ifStep (big-to-small x)) ++ Cons E-If-False (big-to-small x₁)
+big-to-small (B-IsZeroZero x) = isZeroStep (big-to-small x) ++ Cons E-IsZeroZero Nil
+big-to-small (B-IsZeroSucc x) = (isZeroStep (big-to-small x)) ++ Cons (E-IsZeroSucc {!!}) Nil
 
 -- Conversion from small- to big-step representations.
 value-to-value : forall {ty} (t : Term ty) -> (p : IsValue t) -> t ⇓ toVal t p
-value-to-value = {!!}
+value-to-value .true V-True = B-True
+value-to-value .false V-False = B-False
+value-to-value .zero V-Zero = B-Zero
+value-to-value ._ (V-Succ p) = {!B-Succ!}
 
 
 -- And conversion in the other direction
 small-to-big : {ty : Type} -> (t t' : Term ty) -> (p : IsValue t') → Steps t t' → t ⇓ toVal t' p
-small-to-big t v steps = {!!}
+small-to-big t v steps = λ x → {!!}
   where
   prepend-step : {ty : Type} -> (t t' : Term ty) (v : Value ty) → Step t t' -> t' ⇓ v → t ⇓ v
-  prepend-step = {!!}
+  prepend-step ._ .zero .(vnat Zero) E-If-True B-Zero = {!!}
+  prepend-step ._ .true .vtrue E-If-True B-True = {!!}
+  prepend-step ._ .false .vfalse E-If-True B-False = {!!}
+  prepend-step ._ ._ ._ E-If-True (B-Succ step₂) = {!!}
+  prepend-step ._ ._ v₁ E-If-True (B-IfTrue step₂ step₃) = {!!}
+  prepend-step ._ ._ v₁ E-If-True (B-IfFalse step₂ step₃) = {!!}
+  prepend-step ._ ._ .vtrue E-If-True (B-IsZeroZero step₂) = {!!}
+  prepend-step ._ ._ .vfalse E-If-True (B-IsZeroSucc step₂) = {!!}
+  prepend-step ._ .zero .(vnat Zero) E-If-False B-Zero = {!!}
+  prepend-step ._ .true .vtrue E-If-False B-True = {!!}
+  prepend-step ._ .false .vfalse E-If-False B-False = {!!}
+  prepend-step ._ ._ ._ E-If-False (B-Succ step₂) = {!!}
+  prepend-step ._ ._ v₁ E-If-False (B-IfTrue step₂ step₃) = {!!}
+  prepend-step ._ ._ v₁ E-If-False (B-IfFalse step₂ step₃) = {!!}
+  prepend-step ._ ._ .vtrue E-If-False (B-IsZeroZero step₂) = {!!}
+  prepend-step ._ ._ .vfalse E-If-False (B-IsZeroSucc step₂) = {!!}
+  prepend-step ._ ._ v₁ (E-If-If step₁) (B-IfTrue step₂ step₃) = {!!}
+  prepend-step ._ ._ v₁ (E-If-If step₁) (B-IfFalse step₂ step₃) = {!!}
+  prepend-step ._ ._ ._ (E-Succ step₁) (B-Succ step₂) = {!!}
+  prepend-step .(iszero zero) .true .vtrue E-IsZeroZero B-True = {!!}
+  prepend-step ._ .false .vfalse (E-IsZeroSucc x) B-False = {!!}
+  prepend-step ._ ._ .vtrue (E-IsZero step₁) (B-IsZeroZero step₂) = {!!}
+  prepend-step ._ ._ .vfalse (E-IsZero step₁) (B-IsZeroSucc step₂) = {!!}
 
 --------------------------------------------------------------------------------
 -- Relating denotational semantics and big-step semantics
@@ -311,10 +365,10 @@ small-to-big t v steps = {!!}
 -- Prove completeness of the big-step semantics when using the
 -- evaluation function: each term should reduce to its evaluation.
 ⇓-complete : ∀ {ty} (t : Term ty) → t ⇓ ⟦ t ⟧
-⇓-complete true = {!!}
-⇓-complete false = {!!}
+⇓-complete true = B-True
+⇓-complete false = B-False
 ⇓-complete (if t then t₁ else t₂) = {!!}
-⇓-complete zero = {!!}
+⇓-complete zero = B-Zero
 ⇓-complete (succ t) = {!!}
 ⇓-complete (iszero t) = {!!}
 
@@ -322,5 +376,5 @@ small-to-big t v steps = {!!}
 -- big-step evaluated to a value, this value should be the evaluation
 -- of that term.
 ⇓-sound : ∀ {ty} (t : Term ty) (v : Value ty) → t ⇓ v → v == ⟦ t ⟧
-⇓-sound t v p = {!!}
+⇓-sound t v x = {!!}
 
