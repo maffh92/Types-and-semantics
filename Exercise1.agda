@@ -1,3 +1,5 @@
+--Name:       Matthew Swart
+--studentnr: 5597250
 module Exercise1 where
 
 {- Instruction: Fill in all the missing definitions. In most cases,
@@ -279,12 +281,14 @@ SubListTrans (Keep x) (Drop y) = Drop (SubListTrans (Keep x) y)
 SubListTrans (Drop x) (Keep y) = Drop (SubListTrans x y) --How is this correct?
 SubListTrans (Drop x) (Drop y) = Drop (SubListTrans (Drop x) y)
 
+
 SubListSubset : {a : Set} {x : a} {xs ys : List a} -> SubList (Cons x xs) ys -> SubList xs ys
 SubListSubset l = SubListTrans (Drop SubListRefl) l
 
 SubListEmpty : {a : Set} {x : a} {xs : List a} -> SubList (Cons x xs) xs -> Empty
 SubListEmpty (Keep l) = SubListEmpty l
 SubListEmpty (Drop r) = SubListEmpty (SubListSubset r)
+
 
 SubListAntiSym : {a : Set} {xs ys : List a} ->  SubList xs ys -> SubList ys xs -> xs == ys
 SubListAntiSym  Base Base = Refl
@@ -293,7 +297,6 @@ SubListAntiSym {_} {Cons x xs} (Keep n) (Drop m) = cong (Cons x) (SubListAntiSym
 SubListAntiSym {_} {Cons x xs} (Drop n) (Keep m) = cong (Cons x)  (SubListAntiSym (SubListSubset n) m)
 SubListAntiSym {_} {Cons x xs} (Drop n) (Drop m) with SubListEmpty (SubListTrans n (SubListSubset m))
 SubListAntiSym {a} {Cons x xs} (Drop n) (Drop m) | ()
-
 
 ----------------------
 ----- Exercise 7 -----
@@ -394,8 +397,18 @@ step2 em ito | Inr x₁ = Inl x₁
 step3 : impliesToOr -> doubleNegation
 step3  ito {P} h = orCase (λ z → magic (h z) ) (λ z → z) (ito (λ z → z))
 
+
 -- HARDER: show that these are equivalent to Pierces law:
 piercesLaw = {P Q : Set} -> ((P -> Q) -> P) -> P
+
+step4 : excludedMiddle → piercesLaw
+step4 em {P} {Q}  pl with em {P}
+step4 em pl | Inl x = x
+step4 em pl | Inr x = pl (λ p → magic (x p))
+
+step5 : piercesLaw → excludedMiddle
+step5 pl {P} = orCase (λ x → (λ y → Inl y) x) (λ z → z) (Inr (pl (λ z → Inr (λ x → z (Inl x)))))
+
 
 ----------------------
 ----- Exercise 9 -----
@@ -420,12 +433,11 @@ data Cmd : Set where
   PUSH : Nat -> Cmd -> Cmd
   -- replace the top two elements of the stack with their sum
   ADD : Cmd -> Cmd
-  COMBINE : Cmd → Cmd → Cmd
 
 Stack : Set
 Stack = List Nat
 
-addExec : Nat -> Stack -> Stack
+addExec : Nat →  Stack → Stack
 addExec x Nil = Cons x Nil
 addExec x (Cons y st) = Cons (x + y) st
 
@@ -437,32 +449,23 @@ exec HALT st = st
 exec (PUSH x c) st = exec c (Cons x st)
 exec (ADD c) Nil = exec c Nil
 exec (ADD c) (Cons x st) = exec c (addExec x st)
-exec (COMBINE HALT e2) st = exec e2 st
-exec (COMBINE (PUSH x e1) HALT) st = {!!}
-exec (COMBINE (PUSH x e1) (PUSH x₁ e2)) st = {!!}
-exec (COMBINE (PUSH x e1) (ADD e2)) st = {!!}
-exec (COMBINE (PUSH x e1) (COMBINE e2 e3)) st = {!!}  --exec (PUSH x (COMBINE e1 e2)) st
-exec (COMBINE (ADD e1) e2) st = {!!}
-exec (COMBINE (COMBINE e1 e2) e3) st = {!!}
 
-
-map : {A B : Set} {n : Nat} -> (A -> B) →  Vec A n → Vec B n
-map f Nil = Nil
-map f (Cons x xs) = Cons (f x) (map f xs)  
+compile' : Expr → Cmd → Cmd
+compile' (Add e1 e2) c = compile' e1 (compile' e2 c)
+compile' (Val x) c = PUSH x c
 
 -- Define a compiler from expresions to instructions
 compile : Expr -> Cmd
-compile (Add e1 e2) = {!!}
-compile (Val x) = PUSH x HALT
+compile e = compile' e HALT
+
+correctness' : (e : Expr) (s : Stack) (c : Cmd)  → exec c (Cons (eval e) s) == exec (compile' e c) s
+correctness' (Add e1 e2) s c = trans (correctness' {!!} {!!} {!!}) (correctness' {!!} {!!} {!!})
+correctness' (Val x) s c = Refl
 
 -- And prove your compiler correct
 correctness : (e : Expr) (s : Stack) -> Cons (eval e) s == exec (compile e) s
-correctness (Add e1 e2) s with exec (compile (Add e1 e2)) s
-correctness (Add e1 e2) s | Nil = {!!}
-correctness (Add e1 e2) s | Cons x t = {!!}
-correctness (Val x) Nil = Refl
-correctness (Val x) (Cons y ys) = {!!}
+correctness e s = correctness' e s HALT
 
 --BONUS exercises: extend the language with new constructs for let
 --bindings, variables, new operators, mutable references, assignment,
---functions, ...
+--functions, ..
