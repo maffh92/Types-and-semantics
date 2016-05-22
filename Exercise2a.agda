@@ -295,7 +295,7 @@ data _⇓_ : {ty : Type} -> Term ty → Value ty → Set where
   B-IfTrue : ∀ {t₁ t₂ t₃ : Term BOOL} {v₁ v₂ v₃ : Value _ } → t₁ ⇓ vtrue → t₂ ⇓ v₂ → (if t₁ then t₂ else t₃) ⇓ v₂  
   B-IfFalse :  ∀ {t₁ t₂ t₃ : Term BOOL} {v₁ v₂ v₃ : Value _ } → t₁ ⇓ vfalse → t₃ ⇓ v₃ → (if t₁ then t₂ else t₃) ⇓ v₃
   B-IsZeroZero : {t₁ : Term NAT} → t₁ ⇓ vnat Zero → iszero t₁ ⇓ vtrue 
-  B-IsZeroSucc : {t : Term NAT} {v : Nat} → t ⇓ vnat (Succ v) → iszero t ⇓ vfalse
+  B-IsZeroSucc : {t : Term NAT} → IsValue t  → iszero (succ t) ⇓ vfalse
 
 -- Show how to convert from big step to small step semantics
 succStep : ∀ {t₁ t₂ : Term NAT} → Steps t₁ t₂ → Steps (succ t₁) (succ t₂)
@@ -305,8 +305,6 @@ succStep (Cons x xs) = Cons (E-Succ x) (succStep xs)
 isZeroStep : ∀ {t₁ t₂ : Term NAT} → Steps t₁ t₂ → Steps (iszero t₁) (iszero t₂)
 isZeroStep Nil = Nil
 isZeroStep (Cons x xs) = Cons (E-IsZero x) (isZeroStep xs)
-
-
 
 ifStep : ∀ {ty} {t t'} {t₁ t₂ : Term ty} → Steps t t' → Steps (if t then t₁ else t₂) (if t' then t₁ else t₂)
 ifStep Nil = Nil
@@ -320,14 +318,17 @@ big-to-small (B-Succ x) = succStep (big-to-small x)
 big-to-small (B-IfTrue x x₁) = (ifStep (big-to-small x)) ++ Cons E-If-True (big-to-small x₁)
 big-to-small (B-IfFalse x x₁) = (ifStep (big-to-small x)) ++ Cons E-If-False (big-to-small x₁)
 big-to-small (B-IsZeroZero x) = isZeroStep (big-to-small x) ++ Cons E-IsZeroZero Nil
-big-to-small (B-IsZeroSucc x) = (isZeroStep (big-to-small x)) ++ Cons (E-IsZeroSucc {!!}) Nil
+big-to-small (B-IsZeroSucc  x ) = Cons (E-IsZeroSucc x) Nil 
 
+
+lemma' =  {!!}
 -- Conversion from small- to big-step representations.
+
 value-to-value : forall {ty} (t : Term ty) -> (p : IsValue t) -> t ⇓ toVal t p
-value-to-value .true V-True = B-True
-value-to-value .false V-False = B-False
-value-to-value .zero V-Zero = B-Zero
-value-to-value ._ (V-Succ p) = {!B-Succ!}
+value-to-value true V-True = B-True
+value-to-value false V-False = B-False
+value-to-value zero V-Zero = B-Zero
+value-to-value (succ x) (V-Succ p) = B-Succ (value-to-value x p)
 
 
 -- And conversion in the other direction
@@ -336,27 +337,27 @@ small-to-big t v steps = λ x → {!!}
   where
   prepend-step : {ty : Type} -> (t t' : Term ty) (v : Value ty) → Step t t' -> t' ⇓ v → t ⇓ v
   prepend-step ._ .zero .(vnat Zero) E-If-True B-Zero = {!!}
-  prepend-step ._ .true .vtrue E-If-True B-True = {!!}
-  prepend-step ._ .false .vfalse E-If-True B-False = {!!}
+  prepend-step ._ .true .vtrue E-If-True B-True = B-IfTrue B-True B-True
+  prepend-step ._ .false .vfalse E-If-True B-False = B-IfTrue B-True B-False
   prepend-step ._ ._ ._ E-If-True (B-Succ step₂) = {!!}
-  prepend-step ._ ._ v₁ E-If-True (B-IfTrue step₂ step₃) = {!!}
-  prepend-step ._ ._ v₁ E-If-True (B-IfFalse step₂ step₃) = {!!}
-  prepend-step ._ ._ .vtrue E-If-True (B-IsZeroZero step₂) = {!!}
-  prepend-step ._ ._ .vfalse E-If-True (B-IsZeroSucc step₂) = {!!}
+  prepend-step ._ ._ v₁ E-If-True (B-IfTrue step₂ step₃) = B-IfTrue B-True (B-IfTrue step₂ step₃)
+  prepend-step ._ ._ v₁ E-If-True (B-IfFalse step₂ step₃) = B-IfTrue B-True (B-IfFalse step₂ step₃)
+  prepend-step ._ ._ .vtrue E-If-True (B-IsZeroZero step₂) = B-IfTrue B-True (B-IsZeroZero step₂)
+  prepend-step ._ ._ .vfalse E-If-True (B-IsZeroSucc step₂) = B-IfTrue B-True (B-IsZeroSucc step₂)
   prepend-step ._ .zero .(vnat Zero) E-If-False B-Zero = {!!}
-  prepend-step ._ .true .vtrue E-If-False B-True = {!!}
-  prepend-step ._ .false .vfalse E-If-False B-False = {!!}
+  prepend-step ._ .true .vtrue E-If-False B-True = B-IfFalse B-False B-True
+  prepend-step ._ .false .vfalse E-If-False B-False = B-IfFalse B-False B-False
   prepend-step ._ ._ ._ E-If-False (B-Succ step₂) = {!!}
-  prepend-step ._ ._ v₁ E-If-False (B-IfTrue step₂ step₃) = {!!}
-  prepend-step ._ ._ v₁ E-If-False (B-IfFalse step₂ step₃) = {!!}
-  prepend-step ._ ._ .vtrue E-If-False (B-IsZeroZero step₂) = {!!}
-  prepend-step ._ ._ .vfalse E-If-False (B-IsZeroSucc step₂) = {!!}
-  prepend-step ._ ._ v₁ (E-If-If step₁) (B-IfTrue step₂ step₃) = {!!}
-  prepend-step ._ ._ v₁ (E-If-If step₁) (B-IfFalse step₂ step₃) = {!!}
-  prepend-step ._ ._ ._ (E-Succ step₁) (B-Succ step₂) = {!!}
-  prepend-step .(iszero zero) .true .vtrue E-IsZeroZero B-True = {!!}
-  prepend-step ._ .false .vfalse (E-IsZeroSucc x) B-False = {!!}
-  prepend-step ._ ._ .vtrue (E-IsZero step₁) (B-IsZeroZero step₂) = {!!}
+  prepend-step ._ ._ v₁ E-If-False (B-IfTrue step₂ step₃) = B-IfFalse B-False (B-IfTrue step₂ step₃)
+  prepend-step ._ ._ v₁ E-If-False (B-IfFalse step₂ step₃) = B-IfFalse B-False (B-IfFalse step₂ step₃)
+  prepend-step ._ ._ .vtrue E-If-False (B-IsZeroZero step₂) = B-IfFalse B-False (B-IsZeroZero step₂)
+  prepend-step ._ ._ .vfalse E-If-False (B-IsZeroSucc step₂) = B-IfFalse B-False (B-IsZeroSucc step₂)
+  prepend-step ._ ._ v₁ (E-If-If step₁) (B-IfTrue step₂ step₃) = B-IfTrue (prepend-step _ _ vtrue step₁ step₂) step₃
+  prepend-step ._ ._ v₁ (E-If-If step₁) (B-IfFalse step₂ step₃) = B-IfFalse (prepend-step _ _ vfalse step₁ step₂) step₃
+  prepend-step ._ ._ ._ (E-Succ step₁) (B-Succ step₂) = B-Succ (prepend-step _ _ (vnat _) step₁ step₂)
+  prepend-step .(iszero zero) .true .vtrue E-IsZeroZero B-True = B-IsZeroZero B-Zero
+  prepend-step ._ .false .vfalse (E-IsZeroSucc x) B-False = B-IsZeroSucc x
+  prepend-step ._ ._ .vtrue (E-IsZero step₁) (B-IsZeroZero step₂) = B-IsZeroZero (prepend-step _ _ (vnat Zero) step₁ step₂)
   prepend-step ._ ._ .vfalse (E-IsZero step₁) (B-IsZeroSucc step₂) = {!!}
 
 --------------------------------------------------------------------------------
