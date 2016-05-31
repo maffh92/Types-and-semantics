@@ -1,4 +1,5 @@
-
+--Studentnr: 5597250
+--Matthew Swat
 module Exercise2a where
 
 --------------------------------------------------------------------------------
@@ -62,6 +63,7 @@ data Either (a b : Set) : Set where
   Left : a -> Either a b
   Right : b -> Either a b
 
+
 -------------------------------------------------------------------------------
 ----------------------                Syntax             ----------------------
 -------------------------------------------------------------------------------
@@ -69,6 +71,8 @@ data Either (a b : Set) : Set where
 data Type : Set where
   NAT : Type 
   BOOL : Type
+  TUPLE : Type → Type → Type
+
 
 -- Our Term language
 data Term : Type -> Set where 
@@ -78,7 +82,10 @@ data Term : Type -> Set where
   -- Let's add natural numbers
   zero          : Term NAT
   succ          : (n : Term NAT) -> Term NAT
-  iszero        : (n : Term NAT) -> Term BOOL
+  iszero       : (n : Term NAT) -> Term BOOL
+  （_,_）       : ∀ {l r}  → Term l → Term r →  Term (TUPLE l r) 
+  fst             :  ∀ {l r}  → Term (TUPLE l r) → Term l
+  snd             :  ∀ {l r} → Term (TUPLE l r) → Term r
 
 -- The set of atomic values within the language.
 data Value : Type -> Set where
@@ -86,6 +93,7 @@ data Value : Type -> Set where
   vfalse : Value BOOL
   -- And what else?
   vnat : Nat -> Value NAT
+  （_,_） : ∀{l r} → Value l → Value r →  Value (TUPLE l r)
 
 
 -- Associate each value with a term.
@@ -94,6 +102,7 @@ data Value : Type -> Set where
 ⌜ vfalse ⌝ = false
 ⌜ vnat Zero ⌝ = zero
 ⌜ vnat (Succ x) ⌝ = succ ⌜ vnat x ⌝ 
+⌜ （ l , r ） ⌝ = （ ⌜ l ⌝ , ⌜ r ⌝ ）
 
 ------------------------------------------------------------------------
 -- Denotational semantics.
@@ -113,8 +122,11 @@ data Value : Type -> Set where
 ⟦ iszero t ⟧ with ⟦ t ⟧
 ⟦ iszero t ⟧ | vnat Zero = vtrue
 ⟦ iszero t ⟧ | vnat (Succ x) = vfalse
-
-
+⟦ （ l , r ） ⟧ = （ ⟦ l ⟧ , ⟦ r ⟧ ）
+⟦ fst x ⟧  with ⟦ x ⟧
+⟦ fst x ⟧ | （ l , r ） = l
+⟦ snd x ⟧ with ⟦ x ⟧ 
+⟦ snd x ⟧ | （ l , r ） = r
 
 -------------------------------------------------------------------------------
 -- Small-step semantics.
@@ -125,12 +137,15 @@ data IsValue : {ty : Type} -> Term ty -> Set where
   V-False : IsValue false
   V-Zero : IsValue zero
   V-Succ : ∀ {x} -> IsValue x -> IsValue (succ x)
+  V-Tuple : ∀ {ty ty' l r} → IsValue {ty} l → IsValue {ty'} r → IsValue （ l , r ）
+
 
 isValueComplete : forall {ty} -> (v : Value ty) -> IsValue ⌜ v ⌝ 
 isValueComplete vtrue = V-True
 isValueComplete vfalse = V-False
 isValueComplete (vnat Zero) = V-Zero
 isValueComplete (vnat (Succ x)) = V-Succ (isValueComplete (vnat x))
+isValueComplete （ l , r ） = V-Tuple (isValueComplete l) (isValueComplete r)
 
 isValueSound : forall {ty} {t : Term ty} -> IsValue t -> Exists (Value ty) (\v -> ⌜ v ⌝ == t)
 isValueSound V-True = Witness vtrue refl
@@ -138,6 +153,9 @@ isValueSound V-False = Witness vfalse refl
 isValueSound V-Zero = Witness (vnat Zero) refl
 isValueSound (V-Succ p) with isValueSound p
 isValueSound (V-Succ p) | Witness (vnat k) q = Witness (vnat (Succ k) ) (cong succ q)
+isValueSound (V-Tuple l r) with isValueSound l | isValueSound r
+isValueSound (V-Tuple l r) | Witness l₁ refl | Witness r₁ refl = Witness （ l₁ , r₁ ） refl
+
 
 data Step  : {ty : Type} -> Term ty → Term ty → Set where
   E-If-True : forall  {ty} {t1 t2 : Term ty} -> Step (if true then t1 else t2) t1
@@ -148,7 +166,14 @@ data Step  : {ty : Type} -> Term ty → Term ty → Set where
   E-IsZeroZero : Step (iszero zero) true
   E-IsZeroSucc : ∀ {t : Term NAT} -> IsValue t -> Step (iszero (succ t)) false
   E-IsZero : forall {t t' : Term NAT} -> Step t t' -> Step (iszero t) (iszero t')
-
+ 
+  E-EvalFst : ∀ {tyL tyR} {l l' : Term tyL} {r : Term tyR}  → Step l l'  → Step （ l , r ） （ l' , r ）
+  E-EvalSnd : ∀ {tyL tyR} {r r' : Term tyR} {l : Term tyL}  → Step r r'  → Step （ l , r ） （ l , r' ）
+  E-ProjFst :  ∀ {l r}  {t t' : Term (TUPLE l r)}  → Step t t' → Step (fst t) (fst t')
+  E-ProjFst' : ∀ {tyL tyR} {l : Term tyL} {r : Term tyR} → Step (fst （ l , r ）) l
+  E-ProjSnd :  ∀ {l r}  → {t t' : Term (TUPLE l r)}  → Step t t' → Step (snd t) (snd t')
+  E-ProjSnd' :  ∀  {tyL tyR} {l : Term tyL} {r : Term tyR} → Step (snd （ l , r ）) r
+ 
 preservation : ∀ {ty} -> (t t' : Term ty) -> Step t t' -> ty == ty
 preservation t t' step = refl
 
@@ -157,6 +182,8 @@ valuesDoNotStep .true t' () V-True
 valuesDoNotStep .false t' () V-False
 valuesDoNotStep .zero t' () V-Zero
 valuesDoNotStep ._ ._ (E-Succ x₁) (V-Succ x₂) = valuesDoNotStep _ _ x₁ x₂
+valuesDoNotStep ._ ._ (E-EvalFst y) (V-Tuple z z₁) = valuesDoNotStep _ _ y z
+valuesDoNotStep ._ ._ (E-EvalSnd y) (V-Tuple z z₁) = valuesDoNotStep _ _ y z₁
 --valuesDoNotStep .true t' () V-True
 --valuesDoNotStep .false t' () V-False
 --valuesDoNotStep .zero t' () V-Zero
@@ -177,11 +204,13 @@ toVal .false V-False = vfalse
 toVal .zero V-Zero = vnat Zero
 toVal ._ (V-Succ x₁) with toVal _ x₁
 toVal ._ (V-Succ x₁) | vnat x₂ = vnat (Succ x₂)
+toVal ._ (V-Tuple l r) = （ toVal _ l , toVal _ r ）
 --toVal .true V-True = vtrue
 --toVal .false V-False = vfalse
 --toVal .zero V-Zero = vnat Zero
 --toVal _ (V-Succ v) with toVal _ v
 --toVal _ (V-Succ v) | vnat x₁ = vnat (Succ x₁)
+
 
 mutual
   if-reduces : ∀ {ty} (t₁ : Term BOOL) (t₂ : Term ty) (t₃ : Term ty) → Red (if t₁ then t₂ else t₃)
@@ -191,6 +220,10 @@ mutual
   if-reduces (if t1 then t2 else t3) t4 t5 | Reduces x = Reduces (E-If-If x)
   if-reduces (iszero t1) t2 t3 with iszero-reduces t1
   if-reduces (iszero t1) t2 t3 | Reduces x = Reduces (E-If-If x)
+  if-reduces (fst x) y z with fst-reduces x
+  if-reduces (fst x) y z | Reduces x₁ = Reduces (E-If-If x₁)
+  if-reduces (snd x) y z with snd-reduces x
+  if-reduces (snd x) y z | Reduces x₁ = Reduces (E-If-If x₁)
 
   iszero-reduces : (t : Term NAT) -> Red (iszero t) 
   iszero-reduces (if t then t₁ else t₂) with if-reduces t t₁ t₂ 
@@ -199,9 +232,40 @@ mutual
   iszero-reduces (succ t) with progress t
   iszero-reduces (succ t) | Left x = Reduces (E-IsZeroSucc (normal-forms-are-values _ x))
   iszero-reduces (succ t) | Right (Reduces x) = Reduces (E-IsZero (E-Succ x))
+  iszero-reduces (fst x) with fst-reduces x
+  iszero-reduces (fst x) | Reduces x₁ = Reduces (E-IsZero x₁)
+  iszero-reduces (snd x) with snd-reduces x
+  iszero-reduces (snd x) | Reduces x₁ = Reduces (E-IsZero x₁) 
+
+  fst-reduces : ∀ {l r} → (t : Term (TUPLE l r)) -> Red (fst t) 
+  fst-reduces (if t then t₁ else t₂) with if-reduces t t₁ t₂
+  fst-reduces (if t then t₁ else t₂) | Reduces x = Reduces (E-ProjFst x)
+  fst-reduces （ t , t₁ ） = Reduces E-ProjFst'
+  fst-reduces (fst t) with fst-reduces t
+  fst-reduces (fst t) | Reduces x = Reduces (E-ProjFst x)
+  fst-reduces (snd t) with fst-reduces t
+  fst-reduces (snd ._) | Reduces E-ProjFst' = Reduces (E-ProjFst E-ProjSnd')
+  fst-reduces (snd t) | Reduces (E-ProjFst x) = Reduces (E-ProjFst (E-ProjSnd x))
+
+  snd-reduces : ∀ {l r} → (t : Term (TUPLE l r)) -> Red (snd t) 
+  snd-reduces (if t then t₁ else t₂) with if-reduces t t₁ t₂
+  snd-reduces (if t then t₁ else t₂) | Reduces x = Reduces (E-ProjSnd x)
+  snd-reduces （ t , t₁ ） = Reduces E-ProjSnd'
+  snd-reduces (fst t) with fst-reduces t
+  snd-reduces (fst t) | Reduces x = Reduces (E-ProjSnd x)
+  snd-reduces (snd t) with snd-reduces t
+  snd-reduces (snd t) | Reduces x = Reduces (E-ProjSnd x)
 
   succ-nf : (k : Term NAT) -> NF (succ k) -> Red k -> Empty
   succ-nf _ nf (Reduces x) = nf (Reduces (E-Succ x))
+
+
+  fst-nf : ∀ {tyL tyR} (l : Term tyL) → (r : Term tyR) → NF （ l , r ）  → NF l 
+  fst-nf l r nf (Reduces x₁) = nf (Reduces (E-EvalFst x₁))
+
+
+  snd-nf : ∀ {tyL tyR} (l : Term tyL) → (r : Term tyR) → NF （ l , r ）  → NF r 
+  snd-nf l r nf (Reduces x₁) = nf (Reduces (E-EvalSnd x₁))
 
   normal-forms-are-values : ∀ {ty} (t : Term ty) → NF t → IsValue t
   normal-forms-are-values true nf = V-True
@@ -210,7 +274,9 @@ mutual
   normal-forms-are-values zero nf = V-Zero
   normal-forms-are-values (succ t) nf = V-Succ (normal-forms-are-values t (succ-nf t nf))
   normal-forms-are-values (iszero t) nf = contradiction (nf (iszero-reduces t))
-
+  normal-forms-are-values （ l , r ） nf  = V-Tuple (normal-forms-are-values l (fst-nf l r nf)) (normal-forms-are-values r (snd-nf l r nf))
+  normal-forms-are-values (fst t) nf = contradiction (nf (fst-reduces t))
+  normal-forms-are-values (snd t) nf = contradiction (nf (snd-reduces t))
   values-are-normal-forms : forall {ty} -> {t : Term ty} -> IsValue t -> NF t
   values-are-normal-forms p (Reduces step) = valuesDoNotStep _ _ step p
 
@@ -226,11 +292,15 @@ mutual
   progress (succ t) | Left x = Left (lemma t x)
   progress (succ t) | Right (Reduces step) = Right (Reduces (E-Succ step))
   progress (iszero t) = Right (iszero-reduces _ )
+  progress （ l , r ） with progress l | progress r
+  progress （ l₁ , r₁ ） | l₂ | Left x = Left {!!}
+  progress （ l₁ , r₁ ） | l₂ | Right x = Right {!!}
+  progress (fst x) = Right (fst-reduces x)
+  progress (snd x) = Right (snd-reduces x)
 
 --------------------------------------------------------------------------------
 ---------------------------       EXERCISES       ------------------------------
 --------------------------------------------------------------------------------
-
 
 -- Prove that the small step semantics is deterministic
 deterministic : ∀ {ty} (t t₁ t₂ : Term ty) → Step t t₁ → Step t t₂ → t₁ == t₂
@@ -254,6 +324,20 @@ deterministic .(iszero (succ zero)) ._ .false (E-IsZero (E-Succ ())) (E-IsZeroSu
 deterministic ._ ._ .false (E-IsZero (E-Succ step₁)) (E-IsZeroSucc (V-Succ x₁)) = contradiction (valuesDoNotStep _ _ step₁ (V-Succ x₁))
 deterministic ._ ._ ._ (E-IsZero step₁) (E-IsZero step₂) with deterministic _ _ _ step₁ step₂
 deterministic ._ ._ ._ (E-IsZero step₁) (E-IsZero step₂) | refl = refl
+deterministic ._ ._ ._ (E-EvalFst y) (E-EvalFst z) with deterministic _ _ _ y z
+deterministic ._ ._ ._ (E-EvalFst y) (E-EvalFst z) | refl = refl
+deterministic ._ ._ ._ (E-EvalFst y) (E-EvalSnd z) = contradiction (valuesDoNotStep _ _ y {!!})
+deterministic ._ ._ ._ (E-EvalSnd y) (E-EvalFst z) = contradiction (valuesDoNotStep _ _ y {!!})
+deterministic ._ ._ ._ (E-EvalSnd y) (E-EvalSnd z) with deterministic _ _ _ y z
+deterministic ._ ._ ._ (E-EvalSnd y) (E-EvalSnd z) | refl = refl
+deterministic ._ t₃ .t₃ E-ProjFst' E-ProjFst' = refl
+deterministic ._ t₂ ._ E-ProjFst' (E-ProjFst z) = contradiction (valuesDoNotStep _ _ z {!!})
+deterministic ._ t₃ .t₃ E-ProjSnd' E-ProjSnd' = refl
+deterministic ._ t₂ ._ E-ProjSnd' (E-ProjSnd z) = contradiction (valuesDoNotStep _ _ z {!!})
+deterministic ._ ._ t₃ (E-ProjFst y) E-ProjFst' = contradiction (valuesDoNotStep _ _ y {!!})
+deterministic ._ ._ ._ (E-ProjFst y) (E-ProjFst z) = cong fst (deterministic _ _ _ y z) 
+deterministic ._ ._ t₃ (E-ProjSnd y) E-ProjSnd' = {!!}
+deterministic ._ ._ ._ (E-ProjSnd y) (E-ProjSnd z) = cong snd (deterministic _ _ _ y z)
 
 -- A sequence of steps that can be applied in succession.
 data Steps {ty : Type} : Term ty → Term ty → Set where
@@ -291,11 +375,16 @@ data _⇓_ : {ty : Type} -> Term ty → Value ty → Set where
   B-Zero : zero ⇓ vnat Zero
   B-True : true ⇓ vtrue
   B-False : false ⇓ vfalse
-  B-Succ : ∀ {t : Term NAT} {v : Nat} → t ⇓ vnat v → succ t ⇓ vnat (Succ v)
-  B-IfTrue : ∀ {t₁ t₂ t₃ : Term BOOL} {v₁ v₂ v₃ : Value _ } → t₁ ⇓ vtrue → t₂ ⇓ v₂ → (if t₁ then t₂ else t₃) ⇓ v₂  
-  B-IfFalse :  ∀ {t₁ t₂ t₃ : Term BOOL} {v₁ v₂ v₃ : Value _ } → t₁ ⇓ vfalse → t₃ ⇓ v₃ → (if t₁ then t₂ else t₃) ⇓ v₃
-  B-IsZeroZero : {t₁ : Term NAT} → t₁ ⇓ vnat Zero → iszero t₁ ⇓ vtrue 
-  B-IsZeroSucc : {t : Term NAT} → IsValue t  → iszero (succ t) ⇓ vfalse
+  B-Succ : ∀ {nv n}  → n ⇓ vnat nv → succ n ⇓ vnat (Succ nv)
+  B-IfTrue : {ty : Type} {t₂ t₃ : Term ty} → ∀ {t₁ v} → t₁ ⇓ vtrue → t₂ ⇓ v → if t₁ then t₂ else t₃ ⇓ v
+  B-IfFalse :  {ty : Type} {t₂ t₃ : Term ty} → ∀ {t₁ v} → t₁ ⇓ vfalse → t₃ ⇓ v → if t₁ then t₂ else t₃ ⇓ v
+  B-IsZeroZero : ∀ {t₁} → t₁ ⇓ vnat Zero → iszero t₁ ⇓ vtrue 
+  B-IsZeroSucc : ∀ {nv t} →  t ⇓ vnat (Succ nv)  → iszero  t ⇓ vfalse
+  B-EvalTuple : ∀ {tyL tyR lv rv} {l : Term tyL} {r : Term tyR} →  l ⇓ lv  → r ⇓ rv  → （ l , r ） ⇓ （ lv , rv ）
+  B-ProjFst : ∀ {l r} {t : Term (TUPLE l r)} {lv : Value  l} {rv : Value r}   → t ⇓ （ lv , rv ） → fst t ⇓ lv
+  B-ProjSnd : ∀ {l r} {t : Term (TUPLE l r)} {lv : Value  l} {rv : Value r}   → t ⇓ （ lv , rv ） → snd t ⇓ rv
+
+
 
 -- Show how to convert from big step to small step semantics
 succStep : ∀ {t₁ t₂ : Term NAT} → Steps t₁ t₂ → Steps (succ t₁) (succ t₂)
@@ -310,6 +399,24 @@ ifStep : ∀ {ty} {t t'} {t₁ t₂ : Term ty} → Steps t t' → Steps (if t th
 ifStep Nil = Nil
 ifStep (Cons x xs) = Cons (E-If-If x) (ifStep xs)
 
+
+fstStep : ∀ {l r}  {t t' : Term (TUPLE l r)}  → Steps t t' → Steps (fst t) (fst t')
+fstStep Nil = Nil
+fstStep (Cons x x₁) = Cons (E-ProjFst x) (fstStep x₁)
+
+sndStep : ∀ {l r}  {t t' : Term (TUPLE l r)}  → Steps t t' → Steps (snd t) (snd t')
+sndStep Nil = Nil
+sndStep (Cons x x₁) = Cons (E-ProjSnd x) (sndStep x₁)
+
+tupleFstStep  : ∀ {tyL tyR} {l l' : Term tyL} {r : Term tyR}  → Steps l l'  → Steps （ l , r ） （ l' , r ）
+tupleFstStep Nil = Nil
+tupleFstStep (Cons x x₁) = Cons (E-EvalFst x) (tupleFstStep x₁)
+
+tupleSndStep  : ∀ {tyL tyR} {l  : Term tyL} {r r' : Term tyR}  → Steps r r'  → Steps （ l , r ） （ l , r' ）
+tupleSndStep Nil = Nil
+tupleSndStep (Cons x x₁) = Cons (E-EvalSnd x) (tupleSndStep x₁)
+
+
 big-to-small : ∀ {ty} {t : Term ty} {v : Value ty} → t ⇓ v → Steps t ⌜ v ⌝
 big-to-small B-Zero = Nil
 big-to-small B-True = Nil
@@ -318,47 +425,103 @@ big-to-small (B-Succ x) = succStep (big-to-small x)
 big-to-small (B-IfTrue x x₁) = (ifStep (big-to-small x)) ++ Cons E-If-True (big-to-small x₁)
 big-to-small (B-IfFalse x x₁) = (ifStep (big-to-small x)) ++ Cons E-If-False (big-to-small x₁)
 big-to-small (B-IsZeroZero x) = isZeroStep (big-to-small x) ++ Cons E-IsZeroZero Nil
-big-to-small (B-IsZeroSucc  x ) = Cons (E-IsZeroSucc x) Nil 
+big-to-small (B-IsZeroSucc {a} {b} x) = isZeroStep (big-to-small x) ++ Cons (E-IsZeroSucc {!!}) Nil
+big-to-small (B-EvalTuple l r) = tupleFstStep (big-to-small l) ++ tupleSndStep (big-to-small r)
+big-to-small (B-ProjFst x) = fstStep (big-to-small x) ++ Cons E-ProjFst' Nil
+big-to-small (B-ProjSnd x) = sndStep (big-to-small x) ++ Cons E-ProjSnd' Nil
 
 
-lemma' =  {!!}
 -- Conversion from small- to big-step representations.
+
+succLemma :  (x : Term NAT) →  (p : IsValue x)  → toVal x p == ⟦ x ⟧  → succ x ⇓ toVal (succ x) (V-Succ p)
+succLemma .zero V-Zero refl = B-Succ B-Zero
+succLemma (succ p') (V-Succ p) x₁ = {!!}
 
 value-to-value : forall {ty} (t : Term ty) -> (p : IsValue t) -> t ⇓ toVal t p
 value-to-value true V-True = B-True
 value-to-value false V-False = B-False
 value-to-value zero V-Zero = B-Zero
-value-to-value (succ x) (V-Succ p) = B-Succ (value-to-value x p)
+value-to-value (succ x) (V-Succ p) = succLemma x p {!!}
+value-to-value （ l , r ） (V-Tuple l₁ r₁) = B-EvalTuple (value-to-value l l₁) (value-to-value r r₁)
 
+prepend-step : {ty : Type} -> (t t' : Term ty) (v : Value ty) → Step t t' -> t' ⇓ v → t ⇓ v
+prepend-step ._ .zero .(vnat Zero) E-If-True B-Zero = B-IfTrue B-True B-Zero
+prepend-step ._ .zero .(vnat Zero) E-If-False B-Zero = B-IfFalse B-False B-Zero
+prepend-step ._ .true .vtrue E-If-True B-True = B-IfTrue B-True B-True
+prepend-step ._ .true .vtrue E-If-False B-True = B-IfFalse B-False B-True
+prepend-step .(iszero zero) .true .vtrue E-IsZeroZero B-True = B-IsZeroZero B-Zero
+prepend-step ._ .false .vfalse E-If-True B-False = B-IfTrue B-True B-False
+prepend-step ._ .false .vfalse E-If-False B-False = B-IfFalse B-False B-False
+prepend-step ._ .false .vfalse (E-IsZeroSucc x₁) B-False = {!!}
+prepend-step ._ ._ ._ E-If-True (B-Succ x₂) = B-IfTrue B-True (B-Succ x₂)
+prepend-step ._ ._ ._ E-If-False (B-Succ x₂) = B-IfFalse B-False (B-Succ x₂)
+prepend-step ._ ._ ._ (E-Succ x₁) (B-Succ x₂) = B-Succ (prepend-step _ _ (vnat _) x₁ x₂)
+prepend-step ._ ._ v₁ E-If-True (B-IfTrue x₂ x₃) = B-IfTrue B-True (B-IfTrue x₂ x₃)
+prepend-step ._ ._ v₁ E-If-False (B-IfTrue x₂ x₃) = B-IfFalse B-False (B-IfTrue x₂ x₃)
+prepend-step ._ ._ v₁ (E-If-If x₁) (B-IfTrue x₂ x₃) = B-IfTrue (prepend-step _ _ vtrue x₁ x₂) x₃
+prepend-step ._ ._ v₁ E-If-True (B-IfFalse x₂ x₃) = B-IfTrue B-True (B-IfFalse x₂ x₃)
+prepend-step ._ ._ v₁ E-If-False (B-IfFalse x₂ x₃) = B-IfFalse B-False (B-IfFalse x₂ x₃)
+prepend-step ._ ._ v₁ (E-If-If x₁) (B-IfFalse x₂ x₃) = B-IfFalse (prepend-step _ _ vfalse x₁ x₂) x₃
+prepend-step ._ ._ .vtrue E-If-True (B-IsZeroZero x₂) = B-IfTrue B-True (B-IsZeroZero x₂)
+prepend-step ._ ._ .vtrue E-If-False (B-IsZeroZero x₂) = B-IfFalse B-False (B-IsZeroZero x₂)
+prepend-step ._ ._ .vtrue (E-IsZero x₁) (B-IsZeroZero x₂) = B-IsZeroZero (prepend-step _ _ (vnat Zero) x₁ x₂)
+prepend-step ._ ._ .vfalse E-If-True (B-IsZeroSucc x₂) = B-IfTrue B-True (B-IsZeroSucc x₂)
+prepend-step ._ ._ .vfalse E-If-False (B-IsZeroSucc x₂) = B-IfFalse B-False (B-IsZeroSucc x₂)
+prepend-step ._ ._ .vfalse (E-IsZero x₁) (B-IsZeroSucc x₂) = B-IsZeroSucc (prepend-step _ _ (vnat (Succ _)) x₁ x₂)
+prepend-step ._ ._ ._ E-If-True (B-EvalTuple e e₁) = B-IfTrue B-True (B-EvalTuple e e₁)
+prepend-step ._ ._ c E-If-True (B-ProjFst e) = B-IfTrue B-True (B-ProjFst e)
+prepend-step ._ ._ c E-If-True (B-ProjSnd e) = B-IfTrue B-True (B-ProjSnd e)
+prepend-step ._ ._ ._ E-If-False (B-EvalTuple e e₁) = B-IfFalse B-False (B-EvalTuple e e₁)
+prepend-step ._ ._ c E-If-False (B-ProjFst e) = B-IfFalse B-False (B-ProjFst e)
+prepend-step ._ ._ c E-If-False (B-ProjSnd e) = B-IfFalse B-False (B-ProjSnd e)
+prepend-step ._ ._ ._ (E-EvalFst d) (B-EvalTuple e e₁) = B-EvalTuple (prepend-step _ _ _ d e) e₁
+prepend-step ._ ._ ._ (E-EvalSnd d) (B-EvalTuple e e₁) = B-EvalTuple e (prepend-step _ _ _ d e₁)
+prepend-step ._ ._ z (E-ProjFst a) (B-ProjFst b) = B-ProjFst (prepend-step _ _ （ z , _ ） a b)
+prepend-step ._ .zero .(vnat Zero) E-ProjFst' B-Zero = {!!}
+prepend-step ._ .true .vtrue E-ProjFst' B-True = {!!}
+prepend-step ._ .false .vfalse E-ProjFst' B-False = {!!}
+prepend-step ._ ._ ._ E-ProjFst' (B-Succ b) = {!!}
+prepend-step ._ ._ z E-ProjFst' (B-IfTrue b b₁) = {!!}
+prepend-step ._ ._ z E-ProjFst' (B-IfFalse b b₁) = {!!}
+prepend-step ._ ._ .vtrue E-ProjFst' (B-IsZeroZero b) = {!!}
+prepend-step ._ ._ .vfalse E-ProjFst' (B-IsZeroSucc b) = {!!}
+prepend-step ._ ._ ._ E-ProjFst' (B-EvalTuple b b₁) = {!!}
+prepend-step ._ ._ z E-ProjFst' (B-ProjFst b) = {!!}
+prepend-step ._ ._ z E-ProjFst' (B-ProjSnd b) = {!!}
+prepend-step ._ ._ z (E-ProjSnd a) (B-ProjSnd b) = {!!}
+prepend-step ._ .zero .(vnat Zero) E-ProjSnd' B-Zero = {!!}
+prepend-step ._ .true .vtrue E-ProjSnd' B-True = {!!}
+prepend-step ._ .false .vfalse E-ProjSnd' B-False = {!!}
+prepend-step ._ ._ ._ E-ProjSnd' (B-Succ b) = {!!}
+prepend-step ._ ._ z E-ProjSnd' (B-IfTrue b b₁) = {!!}
+prepend-step ._ ._ z E-ProjSnd' (B-IfFalse b b₁) = {!!}
+prepend-step ._ ._ .vtrue E-ProjSnd' (B-IsZeroZero b) = {!!}
+prepend-step ._ ._ .vfalse E-ProjSnd' (B-IsZeroSucc b) = {!!}
+prepend-step ._ ._ ._ E-ProjSnd' (B-EvalTuple b b₁) = {!!}
+prepend-step ._ ._ z E-ProjSnd' (B-ProjFst b) = {!!}
+prepend-step ._ ._ z E-ProjSnd' (B-ProjSnd b) = {!!}
 
 -- And conversion in the other direction
 small-to-big : {ty : Type} -> (t t' : Term ty) -> (p : IsValue t') → Steps t t' → t ⇓ toVal t' p
-small-to-big t v steps = λ x → {!!}
-  where
-  prepend-step : {ty : Type} -> (t t' : Term ty) (v : Value ty) → Step t t' -> t' ⇓ v → t ⇓ v
-  prepend-step ._ .zero .(vnat Zero) E-If-True B-Zero = {!!}
-  prepend-step ._ .true .vtrue E-If-True B-True = B-IfTrue B-True B-True
-  prepend-step ._ .false .vfalse E-If-True B-False = B-IfTrue B-True B-False
-  prepend-step ._ ._ ._ E-If-True (B-Succ step₂) = {!!}
-  prepend-step ._ ._ v₁ E-If-True (B-IfTrue step₂ step₃) = B-IfTrue B-True (B-IfTrue step₂ step₃)
-  prepend-step ._ ._ v₁ E-If-True (B-IfFalse step₂ step₃) = B-IfTrue B-True (B-IfFalse step₂ step₃)
-  prepend-step ._ ._ .vtrue E-If-True (B-IsZeroZero step₂) = B-IfTrue B-True (B-IsZeroZero step₂)
-  prepend-step ._ ._ .vfalse E-If-True (B-IsZeroSucc step₂) = B-IfTrue B-True (B-IsZeroSucc step₂)
-  prepend-step ._ .zero .(vnat Zero) E-If-False B-Zero = {!!}
-  prepend-step ._ .true .vtrue E-If-False B-True = B-IfFalse B-False B-True
-  prepend-step ._ .false .vfalse E-If-False B-False = B-IfFalse B-False B-False
-  prepend-step ._ ._ ._ E-If-False (B-Succ step₂) = {!!}
-  prepend-step ._ ._ v₁ E-If-False (B-IfTrue step₂ step₃) = B-IfFalse B-False (B-IfTrue step₂ step₃)
-  prepend-step ._ ._ v₁ E-If-False (B-IfFalse step₂ step₃) = B-IfFalse B-False (B-IfFalse step₂ step₃)
-  prepend-step ._ ._ .vtrue E-If-False (B-IsZeroZero step₂) = B-IfFalse B-False (B-IsZeroZero step₂)
-  prepend-step ._ ._ .vfalse E-If-False (B-IsZeroSucc step₂) = B-IfFalse B-False (B-IsZeroSucc step₂)
-  prepend-step ._ ._ v₁ (E-If-If step₁) (B-IfTrue step₂ step₃) = B-IfTrue (prepend-step _ _ vtrue step₁ step₂) step₃
-  prepend-step ._ ._ v₁ (E-If-If step₁) (B-IfFalse step₂ step₃) = B-IfFalse (prepend-step _ _ vfalse step₁ step₂) step₃
-  prepend-step ._ ._ ._ (E-Succ step₁) (B-Succ step₂) = B-Succ (prepend-step _ _ (vnat _) step₁ step₂)
-  prepend-step .(iszero zero) .true .vtrue E-IsZeroZero B-True = B-IsZeroZero B-Zero
-  prepend-step ._ .false .vfalse (E-IsZeroSucc x) B-False = B-IsZeroSucc x
-  prepend-step ._ ._ .vtrue (E-IsZero step₁) (B-IsZeroZero step₂) = B-IsZeroZero (prepend-step _ _ (vnat Zero) step₁ step₂)
-  prepend-step ._ ._ .vfalse (E-IsZero step₁) (B-IsZeroSucc step₂) = {!!}
+small-to-big .true .true V-True Nil = B-True
+small-to-big .false .false V-False Nil = B-False
+small-to-big .zero .zero V-Zero Nil = B-Zero
+small-to-big ._ ._ (V-Succ {x} p) Nil = value-to-value (succ x) (V-Succ p)
+small-to-big ._ t' p (Cons E-If-True x₁) = prepend-step _ _ _ E-If-True (small-to-big _ _ p x₁)
+small-to-big ._ t' p (Cons E-If-False x₁) = prepend-step _ _  _ E-If-False (small-to-big _ _ p x₁)
+small-to-big ._ t' p (Cons (E-If-If x) x₁) = prepend-step _ _ _ (E-If-If x) (small-to-big _ _ p x₁)
+small-to-big ._ t' p (Cons (E-Succ x) x₁) = prepend-step _ _ _ (E-Succ x) (small-to-big _ _ p x₁)
+small-to-big .(iszero zero) t' p (Cons E-IsZeroZero x₁) = prepend-step _ _ _ E-IsZeroZero (small-to-big _ _ p x₁)
+small-to-big ._ t' p (Cons (E-IsZeroSucc x) x₁) = prepend-step _ _ _ (E-IsZeroSucc x) (small-to-big _ _ p x₁)
+small-to-big ._ t' p (Cons (E-IsZero x) x₁) = prepend-step _ _ _ (E-IsZero x) (small-to-big _ _ p x₁)
+small-to-big ._ ._ (V-Tuple y y₁) Nil =  value-to-value （ _ , _ ） (V-Tuple y y₁)
+small-to-big ._ t p (Cons (E-EvalFst x) x₁) = prepend-step _ _ _ (E-EvalFst x) (small-to-big _ _ p x₁)
+small-to-big ._ t p (Cons (E-EvalSnd x) x₁) = prepend-step _ _ _ (E-EvalSnd x) (small-to-big _ _ p x₁)
+small-to-big ._ t p (Cons E-ProjFst' x) = prepend-step _ _ _ E-ProjFst' (small-to-big _ t p x)
+small-to-big ._ t p (Cons E-ProjSnd' x) = prepend-step _ _ _ E-ProjSnd' (small-to-big _ _ p x)
+small-to-big ._ t p (Cons (E-ProjFst x) x₁) = prepend-step _ _ _ (E-ProjFst x) (small-to-big _ _ p x₁)
+small-to-big ._ t p (Cons (E-ProjSnd x) x₁) = prepend-step _ (snd _) _ (E-ProjSnd x) (small-to-big _ _ p x₁)
+
 
 --------------------------------------------------------------------------------
 -- Relating denotational semantics and big-step semantics
@@ -368,14 +531,52 @@ small-to-big t v steps = λ x → {!!}
 ⇓-complete : ∀ {ty} (t : Term ty) → t ⇓ ⟦ t ⟧
 ⇓-complete true = B-True
 ⇓-complete false = B-False
-⇓-complete (if t then t₁ else t₂) = {!!}
+⇓-complete (if t then t₁ else t₂) with ⇓-complete t
+... | p with  ⟦ t ⟧
+⇓-complete (if t then t₁ else t₂) | w | vtrue = B-IfTrue w (⇓-complete t₁)
+⇓-complete (if t then t₁ else t₂) | w | vfalse = B-IfFalse w (⇓-complete t₂)
 ⇓-complete zero = B-Zero
-⇓-complete (succ t) = {!!}
-⇓-complete (iszero t) = {!!}
+⇓-complete (succ t) with ⇓-complete t
+... | p with ⟦ t ⟧
+⇓-complete (succ t) | p | vnat x = B-Succ p
+⇓-complete (iszero t) with ⇓-complete t 
+... | p with ⟦ t ⟧
+⇓-complete (iszero t) | p₁ | vnat Zero = B-IsZeroZero p₁
+⇓-complete (iszero t) | p₁ | vnat (Succ x) = B-IsZeroSucc p₁
+⇓-complete (fst x) with ⇓-complete x
+... | p with ⟦ x ⟧
+⇓-complete (fst x) | p | （ v , v₁ ） = B-ProjFst p
+⇓-complete (snd x)  with ⇓-complete x
+... | p with ⟦ x ⟧
+⇓-complete (snd x) | p | （ v , v₁ ） = B-ProjSnd p 
+⇓-complete （ l , r ） = B-EvalTuple (⇓-complete l) (⇓-complete r) 
 
 -- Prove soundness of the big-step semantics: when a term can be
 -- big-step evaluated to a value, this value should be the evaluation
 -- of that term.
 ⇓-sound : ∀ {ty} (t : Term ty) (v : Value ty) → t ⇓ v → v == ⟦ t ⟧
-⇓-sound t v x = {!!}
-
+⇓-sound true vtrue x = refl
+⇓-sound true vfalse ()
+⇓-sound false vtrue ()
+⇓-sound false vfalse x = refl
+⇓-sound (if t then t₁ else t₂) ty₁ (B-IfTrue x x₁) with  ⟦ t ⟧ | ⇓-sound _ _ x
+⇓-sound (if t then t₁ else t₂) ty₁ (B-IfTrue x x₁) | vtrue | refl = ⇓-sound _ _ x₁
+⇓-sound (if t then t₁ else t₂) ty₁ (B-IfTrue x x₁) | vfalse | ()
+⇓-sound (if t then t₁ else t₂) ty₁ (B-IfFalse x x₁) with ⟦ t ⟧ | ⇓-sound _ _ x
+⇓-sound (if t then t₁ else t₂) ty₁ (B-IfFalse x x₁) | vtrue | ()
+⇓-sound (if t then t₁ else t₂) ty₁ (B-IfFalse x x₁) | vfalse | refl = ⇓-sound _ _ x₁
+⇓-sound zero (vnat Zero) x₁ = refl
+⇓-sound zero (vnat (Succ x)) ()
+⇓-sound (succ t) (vnat ._) (B-Succ x₁) with ⟦ t ⟧ | ⇓-sound _ _ x₁
+⇓-sound (succ t) (vnat .(Succ Zero)) (B-Succ x₁) | vnat Zero | refl = refl
+⇓-sound (succ t) (vnat .(Succ (Succ x))) (B-Succ x₁) | vnat (Succ x) | refl = refl
+⇓-sound (iszero t) .vtrue (B-IsZeroZero x) with ⟦ t ⟧ | ⇓-sound _ _ x 
+⇓-sound (iszero t) .vtrue (B-IsZeroZero x) | .(vnat Zero) | refl = refl
+⇓-sound (iszero t) .vfalse (B-IsZeroSucc x) with ⟦ t ⟧ | ⇓-sound _ _ x
+⇓-sound (iszero t) .vfalse (B-IsZeroSucc x) | ._ | refl = refl 
+⇓-sound （ l , r ） ._ (B-EvalTuple l₁ r₁) with ⟦ l ⟧ | ⇓-sound _ _ l₁ |  ⟦ r ⟧ | ⇓-sound _ _ r₁
+⇓-sound （ l₁ , r ） .(（ fl , sr ）) (B-EvalTuple l₂ r₁) | fl | refl | sr | refl = refl 
+⇓-sound (fst t) y (B-ProjFst x) with ⟦ t ⟧ | ⇓-sound _ _ x
+⇓-sound (fst t) y (B-ProjFst x) | （ .y , rv ） | refl = refl
+⇓-sound (snd t) y (B-ProjSnd x) with ⟦ t ⟧ | ⇓-sound _ _ x
+⇓-sound (snd t) y (B-ProjSnd x) | （ lv , .y ） | refl = refl
