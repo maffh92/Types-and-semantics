@@ -1,1 +1,1 @@
-let i = fn x => x in i i
+let i = fn a => a in i i

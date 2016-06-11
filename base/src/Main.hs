@@ -29,5 +29,6 @@ parse programName = do
   runAlgorithm $ (parseExpr content)
 
 runAlgorithm :: Expr -> IO ()
-runAlgorithm e = putStrLn $ "Type: " ++ (view ty)
-	where (ty,subst,vars) = w (M.empty, e) (varsExpr e)
+runAlgorithm e =  do
+			(ty,subst,constraint,vars,ann) <- w (M.empty, e) (varsExpr e) (annotationExpr e)
+			putStrLn $ "Type: " ++ (view ty)

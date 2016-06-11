@@ -1,54 +1,24 @@
-{-# LANGUAGE ExistentialQuantification #-}
-
 module AnalyseSyntax where
 
 import qualified Data.Map as M
 
-{- 
-
-data Syntax = 
-		  T SimpleTy
-		| S SimpleTyScheme
-		| TyEnv SimpleTyEnv
-		| C Constraint
+data SimpleTy =
+		  SVar TyVar
+		| SNat
+		| SBool
+		| SFunction SimpleTy Integer SimpleTy
 		deriving Show
 
 data SimpleTyScheme = 
-		  Tys SimpleTy
-		| Forall ForallVar SimpleTyScheme
+		  STys SimpleTy
+		| SForall [TyVar] SimpleTyScheme
 	    deriving Show
 
-data SimpleTy = 
-		  Var ForallVar
-		| Nat
-		| Bool
-		| Function SimpleTy AnnVar SimpleTy
-		deriving Show
-
-data Constraint = 
-		   Subset [([String],[String])]
-		 | Union Constraint Constraint
-		 deriving Show
-
-data Ty = 
-		  TyVar ForallVar
-		| TyN Integer
-		| TyB Bool
-		| TyFunction SimpleTy AnnVar SimpleTy
-data Ann =
-		  Set [Integer]
-		| UnionAnn Ann Ann
-		 deriving Show
-
-type SimpleTyEnv = M.Map String SimpleTyScheme 
-type AnnVar = M.Map Integer String
-
---}
 data Ty = 
 		  Var TyVar
 		| Nat
 		| Bool
-		| Function Ty Ty
+		| Function Ty Integer Ty
 		deriving Show
 
 data TyScheme = 
@@ -56,12 +26,14 @@ data TyScheme =
 		| Forall [TyVar] TyScheme
 	    deriving Show
 
+data Subst = Subst TySubst AnSubst
+
 type TyVar = String
-type TySubst = M.Map TyVar Ty
-
+type TySubst = M.Map TyVar SimpleTy
+type AnSubst = M.Map Integer Integer
 type TyEnv =  M.Map String TyScheme
+type SimpleTyEnv = M.Map TyVar SimpleTyScheme
+type AnnVar = Integer
+type Annotations = [Integer]
 
-data ForallVar = forall s. Show s => FA s
- 
-instance Show ForallVar where
-  show (FA s) = show s
+type Constraint = M.Map AnnVar Annotations
