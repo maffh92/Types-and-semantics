@@ -23,7 +23,7 @@ run name = do
 -- |Parse and label program
 parse :: String -> IO ()
 parse programName = do
-  let fileName = programName++".fun"
+  let fileName = "../examples/" ++ programName++".fun"
   content <- readFile fileName
   putStrLn $ "Code: " ++ (show $ parseExpr content)
   runAlgorithm $ (parseExpr content)
@@ -32,3 +32,4 @@ runAlgorithm :: Expr -> IO ()
 runAlgorithm e =  do
 			(ty,subst,constraint,vars,ann) <- w (M.empty, e) (varsExpr e) (annotationExpr e)
 			putStrLn $ "Type: " ++ (view ty)
+			putStrLn $ "constraint: " ++ (show constraint)

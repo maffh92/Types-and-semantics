@@ -6,27 +6,27 @@ data SimpleTy =
 		  SVar TyVar
 		| SNat
 		| SBool
-		| SFunction SimpleTy Integer SimpleTy
-		deriving Show
+		| SFunction SimpleTy Integer SimpleTy 
+		deriving (Show, Ord,Eq)
 
 data SimpleTyScheme = 
 		  STys SimpleTy
-		| SForall [TyVar] SimpleTyScheme
-	    deriving Show
+		| SForall TyVar SimpleTyScheme
+	    deriving (Show, Ord,Eq)
 
 data Ty = 
 		  Var TyVar
 		| Nat
 		| Bool
 		| Function Ty Integer Ty
-		deriving Show
+		deriving (Show, Ord,Eq)
 
 data TyScheme = 
 		  Tys Ty
 		| Forall [TyVar] TyScheme
-	    deriving Show
+	    deriving (Show, Ord,Eq)
 
-data Subst = Subst TySubst AnSubst
+data Subst = Subst TySubst AnSubst deriving (Show, Ord,Eq)
 
 type TyVar = String
 type TySubst = M.Map TyVar SimpleTy
