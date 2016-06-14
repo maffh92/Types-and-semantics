@@ -19,24 +19,16 @@ freshVars vars tVars = (M.fromList $ zip (S.toList vars) (S.toList fresh'), tota
 		where (fresh',totalVars) = S.foldr (\a (fresh,t) -> let (x, total) = freshVar a t 
 														 in (S.insert x fresh,total)) 
 								  (S.empty,tVars) vars
-vars :: S.Set TyVar
-vars = S.fromList ["a","b","c"]
 
 modifyTy :: TyVar -> M.Map TyVar TyVar -> SimpleTy -> SimpleTy
 modifyTy old newVars (SVar x) | old == x = SVar $ M.findWithDefault old old newVars --fromJust $ M.lookup x newVars 
 modifyTy old newVars (SFunction t1 a t2) = SFunction (modifyTy old newVars t1) a (modifyTy old newVars t2)
 modifyTy old newVars t = t
 
-
 generalise :: (SimpleTyEnv, SimpleTy) -> SimpleTyScheme 
 generalise (env, t) = S.foldr (\a b -> SForall a b) (STys t) vars --SForall vars (STys t) 
 	where vars = (sVarsTy t) `S.difference` (S.foldr (\a b -> (sVarsTyScheme a) `S.union` b) S.empty $ (S.fromList $ M.elems env))
 
-
-func = SForall "a" (STys (SFunction (SVar "a") 3 (SVar "i")))
-func' = SFunction (SVar "z") 3 (SVar "e")
-funcEnv :: SimpleTyEnv
-funcEnv = M.fromList [("a",func)]
 
 u :: (SimpleTy, SimpleTy) -> String -> Subst 
 u (SNat, SNat) _ = Subst M.empty M.empty
@@ -62,24 +54,32 @@ w (env, A.Var x) vars ann = do
                             let (ty, vars') = instantiate t S.empty vars
                             --putStrLn $ "OldVars:" ++ show vars ++ "\nnewVars:" ++ show vars'
                             --putStrLn $ "OldTy: " ++ show t ++ "\n newTy:" ++ show ty
-                            return (ty, Subst M.empty M.empty, M.empty, vars', ann)
+                            return (ty,
+                             Subst M.empty M.empty,
+                              M.empty,
+                               vars', ann)
 w (env, A.Fn pi x t1) vars ann = do
-                                --putStrLn "Fn:"
-                                let (a1,vars') = freshVar "fn" vars
-                                (t2,s0@(Subst st0 sa0), c, vars'', ann') <- w (M.insert x (STys (SVar a1)) env,t1) vars' ann
-                                let (b,ann'') = freshAnn (pi : ann')
-                                return (SFunction (subst st0 (SVar a1)) b t2, s0, (insertConstraint b [pi] c), vars'', ann'')
-
+                            --putStrLn "Fn:"
+                            let (a1,vars') = freshVar "fn" vars
+                            (t2,s0@(Subst st0 sa0), c, vars'', ann') <- w (M.insert x (STys (SVar a1)) env,t1) vars' ann
+                            let (b,ann'') = freshAnn (S.insert pi ann')
+                            return (SFunction (subst st0 (SVar a1)) b t2,
+                                     s0, 
+                                     (unionConstraint b (S.singleton pi) c), 
+                                     vars'', ann'')
 w (env, A.Fun pi f x t1) vars ann = do
                                 --putStrLn "Fun:"
-                                let (a1, vars') = freshVar "fun" vars
-                                let (a2, vars'') = freshVar "fun" $ vars'
-                                let (b,ann') = freshAnn (pi : ann)
-                                (t2, s1@(Subst st1 sa1), c, vars''', ann'') <- w (M.insert f (STys $ SFunction (SVar a1) b (SVar a2)) env, t1) vars'' ann'
-                                let sa1' = substAnnVar sa1
-                                let s2@(Subst st2 sa2) = u (t2, subst st1 (SVar a2)) ""
-                                let sa2' = substAnnVar sa2
-                                return $ (SFunction (subst st2 $ subst st1 (SVar a1)) (sa2' $ sa1' b) (subst st2 t2), s2 <> s1, (insertConstraint (sa2' $ sa1' b) [pi] c), vars''', ann'')
+                            let (a1, vars') = freshVar "fun" vars
+                            let (a2, vars'') = freshVar "fun" $ vars'
+                            let (b,ann') = freshAnn (S.insert pi ann)
+                            (t2, s1@(Subst st1 sa1), c, vars''', ann'') <- w (M.insert f (STys $ SFunction (SVar a1) b (SVar a2)) env, t1) vars'' ann'
+                            let sa1' = substAnnVar sa1
+                            let s2@(Subst st2 sa2) = u (t2, subst st1 (SVar a2)) ""
+                            let sa2' = substAnnVar sa2
+                            return $ (SFunction (subst st2 $ subst st1 (SVar a1)) (sa2' $ sa1' b) (subst st2 t2),
+                             s2 <> s1,
+                              (unionConstraint (sa2' $ sa1' b) (S.singleton pi) (substConstraint sa2 c)),
+                               vars''', ann'')
 w (env, A.App t1 t2) vars ann = do
                             --putStrLn "App:"
                             (ty1, s1@(Subst st1 sa1), c1, vars', ann') <- w (env, t1) vars ann
@@ -89,36 +89,61 @@ w (env, A.App t1 t2) vars ann = do
                             --putStrLn $ "App a:" ++ a ++ " Current vars:" ++ show vars''' 
                             let (b,ann''') = freshAnn ann''
                             let s3@(Subst st3 sa3) = u (subst st2 ty1, SFunction ty2 b (SVar a)) "w app:"
-                            return (subst st3 (SVar a), s3 <> s2 <> s1, M.empty, vars''', ann''')
+                            let sa2' = substConstraint sa2
+                            let sa3' = substConstraint sa3
+                            return (subst st3 (SVar a), 
+                                s3 <> s2 <> s1, 
+                                unionConstraints (sa3' $ sa2' c1) (sa3' c2), 
+                                vars''', ann''')
 w (env, A.Let x t1 t2) vars ann = do
-                                --putStrLn "Let:"
-                                (ty1, s1@(Subst st1 sa1), c1, vars', ann') <- w (env,t1) vars ann
-                                --putStrLn "Ik ben een let...-----------------------------------------"
-                                (ty2, s2@(Subst st2 sa2), c2, vars'', ann'')  <- w (mapEnv st1 $ M.insert x (generalise (mapEnv st1 env,ty1)) env , t2) vars' ann'
-                                return (ty2, s2 <> s1, M.empty, vars'', ann'')
+                            --putStrLn "Let:"
+                            (ty1, s1@(Subst st1 sa1), c1, vars', ann') <- w (env,t1) vars ann
+                            --putStrLn "Ik ben een let...-----------------------------------------"
+                            (ty2, s2@(Subst st2 sa2), c2, vars'', ann'')  <- w (mapEnv st1 $ M.insert x (generalise (mapEnv st1 env,ty1)) env , t2) vars' ann'
+                            return (ty2,
+                             s2 <> s1,
+                              unionConstraints (substConstraint sa2 c1) c2,
+                               vars'', ann'')
 
 w (env, A.ITE t1 t2 t3) vars ann = do
-                                --putStrLn "ITE:"
-                                (ty1, s1@(Subst st1 sa1), c1, vars', ann') <- w (env, t1) vars ann
-                                (ty2, s2@(Subst st2 sa2), c2, vars'', ann'') <- w (mapEnv st1 env, t2) vars' ann'
-                                (ty3, s3@(Subst st3 sa3), c3, vars''', ann''') <- w (mapEnv st2 (mapEnv st1 env), t3) vars'' ann''
-                                let s4@(Subst st4 sa4) = u (subst st3 (subst st2 ty1), SBool) ""
-                                let s5@(Subst st5 sa5) = u (subst st4 (subst st3 ty2), subst st4 ty3) ""
-                                return (subst st5 (subst st4 ty3),  s5 <> s4 <> s3 <> s2 <> s1, M.empty, vars''', ann''')
+                            --putStrLn "ITE:"
+                            (ty1, s1@(Subst st1 sa1), c1, vars', ann') <- w (env, t1) vars ann
+                            (ty2, s2@(Subst st2 sa2), c2, vars'', ann'') <- w (mapEnv st1 env, t2) vars' ann'
+                            (ty3, s3@(Subst st3 sa3), c3, vars''', ann''') <- w (mapEnv st2 (mapEnv st1 env), t3) vars'' ann''
+                            let s4@(Subst st4 sa4) = u (subst st3 (subst st2 ty1), SBool) ""
+                            let s5@(Subst st5 sa5) = u (subst st4 (subst st3 ty2), subst st4 ty3) ""
+                            let sa1' = substConstraint sa1
+                            let sa2' = substConstraint sa2
+                            let sa3' = substConstraint sa3
+                            let sa4' = substConstraint sa4
+                            let sa5' = substConstraint sa5
+                            return (subst st5 (subst st4 ty3),
+                             s5 <> s4 <> s3 <> s2 <> s1,
+                              unionConstraints (sa5' $ sa4' $ sa3' $ sa2' c1) $ unionConstraints (sa5' $ sa4' $ sa3' c2) (sa5' $ sa4' c3),
+                               vars''', ann''')
 w (env, A.Oper op t1 t2) vars ann = do
-                                --putStrLn "Oper"
-                                (ty1, s1@(Subst st1 sa1), c1, vars', ann') <- w (env, t1) vars ann
-                                (ty2, s2@(Subst st2 sa2), c2, vars'', ann'') <- w (mapEnv st1 env, t2) vars' ann'
-                                let s3@(Subst st3 sa3) = u (subst st2 ty1, ty1) ""
-                                let s4@(Subst st4 sa4) = u (subst st3 ty2, ty2) ""
-                                return (SNat, s2 <> s1, M.empty , vars'', ann'')
+                            --putStrLn "Oper"
+                            (ty1, s1@(Subst st1 sa1), c1, vars', ann') <- w (env, t1) vars ann
+                            (ty2, s2@(Subst st2 sa2), c2, vars'', ann'') <- w (mapEnv st1 env, t2) vars' ann'
+                            let s3@(Subst st3 sa3) = u (subst st2 ty1, ty1) ""
+                            let s4@(Subst st4 sa4) = u (subst st3 ty2, ty2) ""
+                            let sa1' = substConstraint sa1
+                            let sa2' = substConstraint sa2
+                            let sa3' = substConstraint sa3
+                            let sa4' = substConstraint sa4
+                            return (SNat, s2 <> s1,
+                             unionConstraints (sa4' $ sa3' $ sa2' c1) (sa4' $ sa3' c2),
+                              vars'', ann'')
 
 
-addConstraint :: AnnVar -> Annotations -> Constraint -> Constraint
-addConstraint v ans c = f $ M.lookup v c
+unionConstraints :: Constraint -> Constraint -> Constraint
+unionConstraints c1 c2 = M.foldWithKey unionConstraint c1 c2
+
+unionConstraint :: AnnVar -> Annotations -> Constraint -> Constraint
+unionConstraint v ans c = f $ M.lookup v c
 	where
 		f Nothing  = M.insert v ans c
-		f (Just x) = M.insert v (x ++ ans) c 
+		f (Just x) = M.insert v (x `S.union` ans) c 
 
 insertConstraint :: AnnVar -> Annotations -> Constraint -> Constraint
 insertConstraint v ans c = M.insert v ans c
@@ -133,7 +158,6 @@ substConstraint a c = M.mapKeys (\k -> M.findWithDefault k k a) c
 
 substAnnVar :: AnSubst -> AnnVar -> AnnVar
 substAnnVar xs a = M.findWithDefault a a xs
-
 
 subst :: TySubst -> SimpleTy -> SimpleTy
 subst s t@(SVar x) = M.findWithDefault t x s --check (M.lookup x s) (" subst: There is no " ++ x ++ " in " ++ show s)
@@ -151,38 +175,6 @@ check _ s = error s
 		  substType = M.map (subst st1) st2 `M.union` st1
 		  substAnnotation = M.map (substAnnVar sa1) sa2 `M.union` sa1
 
-varsTy :: Ty -> [String]
-varsTy (Var x) = [x]
-varsTy Bool = []
-varsTy Nat = []
-varsTy (Function t1 a t2) = (varsTy t1) ++ (varsTy t2) 
-
-sVarsTy :: SimpleTy -> S.Set String
-sVarsTy (SVar x) = S.singleton x
-sVarsTy SBool = S.empty
-sVarsTy SNat = S.empty
-sVarsTy (SFunction t1 a t2) = (sVarsTy t1) `S.union` (sVarsTy t2)
-
-varsTyScheme :: TyScheme -> [String]
-varsTyScheme (Forall x t) = x ++ varsTyScheme t
-varsTyScheme (Tys t) = varsTy t
-
-sVarsTyScheme :: SimpleTyScheme -> S.Set String
-sVarsTyScheme (SForall x t) = S.insert x $ sVarsTyScheme t
-sVarsTyScheme (STys t) = sVarsTy t
-
-freshVar :: String -> S.Set TyVar -> (TyVar, S.Set TyVar)
-freshVar x vars = if S.notMember x vars 
-					then (x,S.insert x vars) 
-					else freshVar (x ++ "'") vars
-
-freshAnn :: Annotations -> (Integer, Annotations)
-freshAnn xs = (x, x : xs)
-	where x = (maximum xs) + 1
-
-replace :: String -> Ty -> TyEnv -> TyEnv
-replace x t env = M.insert x (Tys t) env 
-
 mapEnv :: TySubst -> SimpleTyEnv -> SimpleTyEnv
 mapEnv st1 env = M.map (updateSimpleScheme st1) env
 
@@ -195,14 +187,24 @@ chk (n1, t@(SVar n2)) _ | n1 == n2  		 = Subst (substTy n1 t) M.empty
 chk (n1, t) _           | S.notMember n1 $ sVarsTy t = Subst (substTy n1 t) M.empty
 chk (n1, t) s = error $ "Chk: " ++ n1 ++ " t:" ++ show t ++ " This happended because of:" ++ s
 
-fun :: SimpleTy
-fun = SFunction (SVar "d") 3 (SVar "e")
 
+--introduce Fresh variables
+freshVar :: String -> S.Set TyVar -> (TyVar, S.Set TyVar)
+freshVar x vars = if S.notMember x vars 
+                    then (x,S.insert x vars) 
+                    else freshVar (x ++ "'") vars
+
+freshAnn :: Annotations -> (Integer, Annotations)
+freshAnn xs = (x, S.insert x xs)
+    where x = (S.findMax xs) + 1
+
+
+--Collect information
 substTy :: String -> SimpleTy -> TySubst
 substTy s SBool    = M.empty
-substTy s SNat 	   = M.empty
+substTy s SNat     = M.empty
 substTy s (SVar x) = M.empty
-substTy s t 	   = M.singleton s t
+substTy s t        = M.singleton s t
 
 varsExpr :: A.Expr -> S.Set TyVar
 varsExpr (A.Integer x) = S.empty
@@ -217,9 +219,9 @@ varsExpr (A.ITE e1 e2 e3) = varsExpr e1 `S.union` varsExpr e2 `S.union` varsExpr
 varsExpr (A.Oper op e1 e2) = varsExpr e1 `S.union` varsExpr e2
 
 annotationExpr :: A.Expr -> Annotations
-annotationExpr (A.Fn pi x e0) = pi : (annotationExpr e0)
-annotationExpr (A.Fun pi f x e0) = pi : (annotationExpr e0)
-annotationExpr e = []
+annotationExpr (A.Fn pi x e0) = S.insert pi (annotationExpr e0)
+annotationExpr (A.Fun pi f x e0) = S.insert pi (annotationExpr e0)
+annotationExpr e = S.empty
 
 exprToTy :: A.Expr -> SimpleTy
 exprToTy (A.Integer x) = SNat
@@ -232,3 +234,13 @@ exprToTy (A.App e1 e2) = SBool
 exprToTy (A.Let x e1 e2) = SNat
 exprToTy (A.ITE e1 e2 e3) = SNat
 exprToTy (A.Oper op e1 e2) = SNat
+
+sVarsTy :: SimpleTy -> S.Set String
+sVarsTy (SVar x) = S.singleton x
+sVarsTy SBool = S.empty
+sVarsTy SNat = S.empty
+sVarsTy (SFunction t1 a t2) = (sVarsTy t1) `S.union` (sVarsTy t2)
+
+sVarsTyScheme :: SimpleTyScheme -> S.Set String
+sVarsTyScheme (SForall x t) = S.insert x $ sVarsTyScheme t
+sVarsTyScheme (STys t) = sVarsTy t

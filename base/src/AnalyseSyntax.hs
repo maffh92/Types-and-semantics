@@ -1,6 +1,7 @@
 module AnalyseSyntax where
 
 import qualified Data.Map as M
+import qualified Data.Set as S
 
 data SimpleTy =
 		  SVar TyVar
@@ -34,6 +35,6 @@ type AnSubst = M.Map Integer Integer
 type TyEnv =  M.Map String TyScheme
 type SimpleTyEnv = M.Map TyVar SimpleTyScheme
 type AnnVar = Integer
-type Annotations = [Integer]
+type Annotations = S.Set AnnVar
 
 type Constraint = M.Map AnnVar Annotations

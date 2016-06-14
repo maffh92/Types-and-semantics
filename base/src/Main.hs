@@ -32,4 +32,4 @@ runAlgorithm :: Expr -> IO ()
 runAlgorithm e =  do
 			(ty,subst,constraint,vars,ann) <- w (M.empty, e) (varsExpr e) (annotationExpr e)
 			putStrLn $ "Type: " ++ (view ty)
-			putStrLn $ "constraint: " ++ (show constraint)
+			putStrLn $ "Constraint: " ++ (show constraint)
