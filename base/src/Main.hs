@@ -9,7 +9,7 @@ module Main
 import Ast
 import Parsing
 import Algorithm
-import Data.Set (Set)
+import qualified Data.Set as S
 import qualified Data.Map as M
 import View
   
@@ -25,11 +25,13 @@ parse :: String -> IO ()
 parse programName = do
   let fileName = "../examples/" ++ programName++".fun"
   content <- readFile fileName
-  putStrLn $ "Code: " ++ (show $ parseExpr content)
-  runAlgorithm $ (parseExpr content)
+  runAlgorithm $ parseExpr content
 
 runAlgorithm :: Expr -> IO ()
 runAlgorithm e =  do
-			(ty,subst,constraint,vars,ann) <- w (M.empty, e) (varsExpr e) (annotationExpr e)
-			putStrLn $ "Type: " ++ (view ty)
-			putStrLn $ "Constraint: " ++ (show constraint)
+            let (newExpr, annotation) = adjustAnnotation (e,S.empty)
+            (ty,subst,constraint,vars,ann) <- w (M.empty, newExpr) (varsExpr e) annotation
+            putStrLn $ "Parsed code: " ++ show newExpr
+            putStrLn $ "Type: " ++ (view ty)
+            putStrLn $ "Constraint: " ++ (show constraint)
+            putStrLn $ "Total annotation " ++ (show ann)

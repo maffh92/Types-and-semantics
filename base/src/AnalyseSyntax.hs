@@ -7,7 +7,8 @@ data SimpleTy =
 		  SVar TyVar
 		| SNat
 		| SBool
-		| SFunction SimpleTy Integer SimpleTy 
+		| SFunction SimpleTy Pi SimpleTy
+		| SPair Pi SimpleTy SimpleTy
 		deriving (Show, Ord,Eq)
 
 data SimpleTyScheme = 
@@ -19,7 +20,7 @@ data Ty =
 		  Var TyVar
 		| Nat
 		| Bool
-		| Function Ty Integer Ty
+		| Function Ty Pi Ty
 		deriving (Show, Ord,Eq)
 
 data TyScheme = 
@@ -36,5 +37,5 @@ type TyEnv =  M.Map String TyScheme
 type SimpleTyEnv = M.Map TyVar SimpleTyScheme
 type AnnVar = Integer
 type Annotations = S.Set AnnVar
-
+type Pi = Integer
 type Constraint = M.Map AnnVar Annotations

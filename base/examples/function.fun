@@ -1,0 +1,1 @@
+let srt = fn x => x in srt 1

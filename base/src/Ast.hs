@@ -17,6 +17,8 @@ data Expr
   | Let     Name Expr Expr
   | ITE     Expr Expr Expr
   | Oper    Op   Expr Expr
+  | Pair    Pi   Expr Expr
+  | PCase   Expr Name Name Expr
   deriving (Eq,Show)
 
 
@@ -27,5 +29,3 @@ bin op x y = Oper r x y where
         "-" -> Sub
         "*" -> Mul
         "/" -> Div
-
-        
