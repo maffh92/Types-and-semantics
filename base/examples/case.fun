@@ -1,1 +1,0 @@
-let switch = fn x => pcase x of Pair x1 x2 => if true then Pair x1 x2 else x in switch (Pair true 1)

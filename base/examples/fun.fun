@@ -1,0 +1,1 @@
+let rec = fun rec x => x * rec x in rec
