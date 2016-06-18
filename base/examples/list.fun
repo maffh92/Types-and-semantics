@@ -1,1 +1,1 @@
-let x = Cons (Cons 1 2) Nil in x
+let x = Cons 1 (Cons 1 Nil) in x

@@ -1,1 +1,1 @@
-let switch = if true then false else true in switch
+let switch = if true then (fn x => x) else (fn y => y) in switch
