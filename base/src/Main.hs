@@ -25,12 +25,13 @@ parse :: String -> IO ()
 parse programName = do
   let fileName = "../examples/" ++ programName++".fun"
   content <- readFile fileName
-  runAlgorithm $ parseExpr content
+  putStrLn $ show (fst $ adjustAnnotation (parseExpr content, S.empty))
+  --runAlgorithm $ parseExpr content
 
 runAlgorithm :: Expr -> IO ()
 runAlgorithm e =  do
             let (newExpr, annotation) = adjustAnnotation (e,S.empty)
-            (ty,subst,constraint,vars,ann) <- w (M.empty, newExpr) (varsExpr e) annotation
+            (ty,subst,constraint,vars,ann) <- w (M.empty, newExpr) (collectVarsExpr e) annotation
             putStrLn $ "Parsed code: " ++ show newExpr
             putStrLn $ "Type: " ++ (view ty)
             putStrLn $ "Constraint: " ++ (show constraint)

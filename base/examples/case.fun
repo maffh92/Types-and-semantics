@@ -1,1 +1,1 @@
-let srt = fn x => pcase x of Pair x1 x2 => if false then x else Pair x2 x1 in srt (Pair 2 1)
+let switch = fn x => pcase x of Pair x1 x2 => if true then Pair x1 x2 else x in switch (Pair true 1)

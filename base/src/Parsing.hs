@@ -19,16 +19,17 @@ import Text.ParserCombinators.UU.BasicInstances (Parser,pSym)
 parseExpr :: String -> Expr
 parseExpr = runParser "stdin" pExpr
 
+
 -- * Parsing the FUN language
 pExpr :: Parser Expr
-pExpr = (pFn <|> pFun <|> pITE <|> pLet <|> pPair <|> pCase) <<|> pBin
+pExpr = (pFn <|> pFun <|> pITE <|> pLet <|> pPair <|> pPCase <|> pCons <|> pLCase) <<|> pBin
   where
   
   -- literal expressions
   pLit = Integer <$> pInteger
      <|> Bool True  <$ pSymbol "true"
      <|> Bool False <$ pSymbol "false"
-    
+     <|> (Nil 0) <$ pSymbol "Nil"
   -- atomic expressions
   pAtom = pLit
      <<|> Var <$> pIdent
@@ -41,7 +42,9 @@ pExpr = (pFn <|> pFun <|> pITE <|> pLet <|> pPair <|> pCase) <<|> pBin
   pLet    = iI Let "let" pIdent "=" pExpr "in" pExpr Ii
   pITE    = iI ITE "if" pExpr "then" pExpr "else" pExpr Ii
   pPair   = iI (Pair 0) "Pair" pExpr pExpr Ii
-  pCase   = iI PCase "pcase" pExpr "of" "Pair" pIdent pIdent "=>" pExpr Ii
+  pPCase  = iI PCase "pcase" pExpr "of" "Pair" pIdent pIdent "=>" pExpr Ii
+  pCons   = iI (Cons 0) "Cons" pExpr pExpr Ii
+  pLCase  = iI Case "case" pExpr "of" "Cons" pIdent pIdent "=>" pExpr "or" pExpr Ii
    
   -- chained expressions
   pApp = pChainl_ng (App <$ pSpaces) pAtom

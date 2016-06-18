@@ -19,6 +19,9 @@ data Expr
   | Oper    Op   Expr Expr
   | Pair    Pi   Expr Expr
   | PCase   Expr Name Name Expr
+  | Cons    Pi   Expr Expr
+  | Case    Expr Name Name Expr Expr
+  | Nil     Pi
   deriving (Eq,Show)
 
 

@@ -1,0 +1,1 @@
+let switch = if true then false else true in switch
