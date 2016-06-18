@@ -9,8 +9,7 @@ data SimpleTy =
 		| SBool
 		| SFunction SimpleTy Pi SimpleTy
 		| SPair Pi SimpleTy SimpleTy
-		| Cons [Pi] SimpleTy SimpleTy
-		| Nil Pi
+		| Cons (S.Set Pi) SimpleTy
 		deriving (Show, Ord,Eq)
 
 data SimpleTyScheme = 

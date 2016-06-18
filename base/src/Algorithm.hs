@@ -32,23 +32,27 @@ generalise (env, t) = S.foldr (\a b -> SForall a b) (STys t) vars --SForall vars
 	where vars = (collectVarsTy t) `S.difference` (S.foldr (\a b -> (collectVarsTyScheme a) `S.union` b) S.empty $ (S.fromList $ M.elems env))
 
 
-u :: (SimpleTy, SimpleTy) -> String -> Subst 
-u (SNat, SNat) _ = Subst M.empty M.empty
-u (SBool, SBool) _ = Subst M.empty M.empty
-u (SPair b1 t1 t2, SPair b2 t3 t4) s = s2 <> s1
+u :: (SimpleTy, SimpleTy) -> Annotations -> String -> Subst 
+u (SNat, SNat) ans _ = Subst M.empty M.empty
+u (SBool, SBool) ans _ = Subst M.empty M.empty
+u (Cons b1 t1, Cons b2 t2) ans s = s1
+  where 
+    --s0 = updateTyAnnVar b1 b2
+    s1@(Subst st1 sa1) = u (t1,t2) ans "Because of the cons"
+u (SPair b1 t1 t2, SPair b2 t3 t4) ans s = s2 <> s1
   where 
     s0 = updateTyAnnVar b1 b2
-    s1@(Subst st1 sa1) = u (s0 t1,s0 t3) "It is because This function"
-    s2@(Subst st2 sa2) = u (subst st1 (s0 t2), subst st1 (s0 t4)) s
-u (SFunction t1 b1 t2, SFunction t3 b2 t4) s = s2 <> s1
+    s1@(Subst st1 sa1) = u (s0 t1,s0 t3) ans "Because of the Pair"
+    s2@(Subst st2 sa2) = u (subst st1 (s0 t2), subst st1 (s0 t4)) ans s
+u (SFunction t1 b1 t2, SFunction t3 b2 t4) ans s = s2 <> s1
 	where
 		s0 = updateTyAnnVar b1 b2
-		s1@(Subst st1 sa1) = u (s0 t1,s0 t3) "It is because This function"
-		s2@(Subst st2 sa2) = u (subst st1 (s0 t2), subst st1 (s0 t4)) s
-u (SVar x, t) s = chk (x, t) s
-u (t, SVar x) s = chk (x, t) s
-u (_, _) _ = error "Fail in Unification"
-
+		s1@(Subst st1 sa1) = u (s0 t1,s0 t3) ans "It is because This function"
+		s2@(Subst st2 sa2) = u (subst st1 (s0 t2), subst st1 (s0 t4)) ans s
+u (SVar x, t) ans s = chk (x, t) s
+u (t, SVar x) ans s = chk (x, t) s
+u (_, _) _ _ = error "Fail in Unification"
+ 
 
 w :: (SimpleTyEnv, A.Expr) -> S.Set TyVar -> Annotations -> IO (SimpleTy, Subst, Constraint, S.Set TyVar, Annotations) 
 w (env, A.Integer x) vars ann = return (SNat, Subst M.empty M.empty, M.empty, vars, ann)
@@ -75,13 +79,12 @@ w (env, A.Fn pi x t1) vars ann = do
                                      (unionConstraint b (S.singleton pi) c), 
                                      vars'', ann'')
 w (env, A.Fun pi f x t1) vars ann = do
-                                --putStrLn "Fun:"
                             let (a1, vars') = freshVar "fun" vars
                             let (a2, vars'') = freshVar "fun" $ vars'
                             let (b,ann') = freshAnn (S.insert pi ann)
                             (t2, s1@(Subst st1 sa1), c, vars''', ann'') <- w (M.insert f (STys $ SFunction (SVar a1) b (SVar a2)) env, t1) vars'' ann'
                             let sa1' = substAnnVar sa1
-                            let s2@(Subst st2 sa2) = u (t2, subst st1 (SVar a2)) ""
+                            let s2@(Subst st2 sa2) = u (t2, subst st1 (SVar a2)) ann ""
                             let sa2' = substAnnVar sa2
                             return $ (SFunction (subst st2 $ subst st1 (SVar a1)) (sa2' $ sa1' b) (subst st2 t2),
                              s2 <> s1,
@@ -95,7 +98,7 @@ w (env, A.App t1 t2) vars ann = do
                             let (a, vars''') = freshVar "app" vars''
                             --putStrLn $ "App a:" ++ a ++ " Current vars:" ++ show vars''' 
                             let (b,ann''') = freshAnn ann''
-                            let s3@(Subst st3 sa3) = u (subst st2 ty1, SFunction ty2 b (SVar a)) "w app:"
+                            let s3@(Subst st3 sa3) = u (subst st2 ty1, SFunction ty2 b (SVar a)) ann "w app:"
                             let sa2' = substConstraint sa2
                             let sa3' = substConstraint sa3
                             return (subst st3 (SVar a), 
@@ -116,8 +119,8 @@ w (env, A.ITE t1 t2 t3) vars ann = do
                             (ty1, s1@(Subst st1 sa1), c1, vars', ann') <- w (env, t1) vars ann
                             (ty2, s2@(Subst st2 sa2), c2, vars'', ann'') <- w (mapEnv st1 env, t2) vars' ann'
                             (ty3, s3@(Subst st3 sa3), c3, vars''', ann''') <- w (mapEnv st2 (mapEnv st1 env), t3) vars'' ann''
-                            let s4@(Subst st4 sa4) = u (subst st3 (subst st2 ty1), SBool) ""
-                            let s5@(Subst st5 sa5) = u (subst st4 ty3, subst st4 $ subst st3 ty2) ""
+                            let s4@(Subst st4 sa4) = u (subst st3 (subst st2 ty1), SBool) ann ""
+                            let s5@(Subst st5 sa5) = u (subst st4 ty3, subst st4 $ subst st3 ty2) ann ""
                             let sa1' = substConstraint sa1
                             let sa2' = substConstraint sa2
                             let sa3' = substConstraint sa3
@@ -131,8 +134,8 @@ w (env, A.Oper op t1 t2) vars ann = do
                             --putStrLn "Oper"
                             (ty1, s1@(Subst st1 sa1), c1, vars', ann') <- w (env, t1) vars ann
                             (ty2, s2@(Subst st2 sa2), c2, vars'', ann'') <- w (mapEnv st1 env, t2) vars' ann'
-                            let s3@(Subst st3 sa3) = u (subst st2 ty1, ty1) ""
-                            let s4@(Subst st4 sa4) = u (subst st3 ty2, ty2) ""
+                            let s3@(Subst st3 sa3) = u (subst st2 ty1, ty1) ann ""
+                            let s4@(Subst st4 sa4) = u (subst st3 ty2, ty2) ann ""
                             let sa1' = substConstraint sa1
                             let sa2' = substConstraint sa2
                             let sa3' = substConstraint sa3
@@ -151,7 +154,8 @@ w (env, A.Pair pi t1 t2) vars ann = do
                               unionConstraints c1 (unionConstraint (sa2' $ sa1' b1) (S.singleton pi) c2),
                               vars2,
                               ann3)
- --case t1 of Pair(t2,t3) => t4                          
+ --case t1 of Pair(t2,t3) => t4   
+
 w (env, A.PCase t1 x y t2) vars ann = do
                             let (a1, vars1) = freshVar "case" vars
                             let (a2, vars2) = freshVar "case" vars1
@@ -160,10 +164,10 @@ w (env, A.PCase t1 x y t2) vars ann = do
                             putStrLn $ "Env1: " ++ show st1
                             (ty2, s2@(Subst st2 sa2), c2, vars4, ann2) <- w (mapEnv st1 env1, t2) vars3 ann1
                             let (b1, ann3) = freshAnn ann2
-                            let s3@(Subst st3 sa3) = u (subst st2 $ subst st1 ty1, SPair b1 (SVar a1) (SVar a2)) "The case of course"
-                            let sa1' = substConstraint sa1
-                            let sa2' = substConstraint sa2
-                            let sa3' = substConstraint sa3
+                                s3@(Subst st3 sa3) = u (subst st2 $ subst st1 ty1, SPair b1 (SVar a1) (SVar a2)) ann "The case of course"
+                                sa1' = substConstraint sa1
+                                sa2' = substConstraint sa2
+                                sa3' = substConstraint sa3
                             return (
                               ty2,
                               s3 <> s2 <> s1,
@@ -176,19 +180,22 @@ w (env, A.Case t1 x y t2 t3) vars ann = do
                             let (a2, vars2) = freshVar "case" vars1
                             let env1 = M.insert x (STys (SVar a1)) $ M.insert y (STys (SVar a2)) env
                             (ty1, s1@(Subst st1 sa1), c1, vars3 , ann1) <- w (env, t1) vars2 ann
-                            putStrLn $ "Env1: " ++ show st1
                             (ty2, s2@(Subst st2 sa2), c2, vars4, ann2) <- w (mapEnv st1 env1, t2) vars3 ann1
-                            let (b1, ann3) = freshAnn ann2
-                            let s3@(Subst st3 sa3) = u (subst st2 $ subst st1 ty1, Cons b1 (SVar a1) (SVar a2)) "The case of course"
+                            (ty3, s3@(Subst st3 sa3), c3, vars5, ann3) <- w (mapEnv st2 $ mapEnv st1 env1, t3) vars4 ann2
+                            let (b1, ann4) = freshAnn ann3
+                            let s4@(Subst st4 sa4) = u (subst st2 ty1, Cons (S.singleton b1) (SVar a2)) ann "The case of course"
+                            let s5@(Subst st5 sa5) = u (subst st4 ty3, subst st4 $ subst st3 ty2) ann "The case of course"
                             let sa1' = substConstraint sa1
                             let sa2' = substConstraint sa2
                             let sa3' = substConstraint sa3
+                            let sa4' = substConstraint sa4
+                            let sa5' = substConstraint sa5
                             return (
-                              ty2,
-                              s3 <> s2 <> s1,
+                              subst st5 $ subst st4 $ subst st3 $ ty2,
+                              s5 <> s4 <> s3 <> s2 <> s1,
                               unionConstraints (sa3' $ sa2' c1) (sa3' c2), 
                               vars4,
-                              ann3
+                              ann4
                               )
 w (env, A.Cons  pi t1 t2) vars ann = do
                             let (b1, ann1) = freshAnn ann
@@ -196,16 +203,16 @@ w (env, A.Cons  pi t1 t2) vars ann = do
                             (ty2, s2@(Subst st2 sa2), c2, vars2, ann3) <- w (mapEnv st1 env, t2) vars1 ann2
                             let sa1' = substAnnVar sa1
                             let sa2' = substAnnVar sa2
-                            return (Cons [(sa2' $ sa1' b1)] ty1 ty2,
-                              s2 <> s1,
+                            let s3@(Subst st3 sa5) = u (ty2, Cons (S.singleton pi) (subst st2 ty1)) ann "The case of course"
+                            return (Cons (S.singleton $ sa2' $ sa1' b1) (subst st3 $ subst st2 ty1),
+                              s3 <> s2 <> s1,
                               unionConstraints c1 (unionConstraint (sa2' $ sa1' b1) (S.singleton pi) c2),
                               vars2,
                               ann3)
-w (env, A.Nil pi) vars ann	= let (b1, ann1) = freshAnn ann in return (Nil (b1), Subst M.empty M.empty, M.singleton b1 (S.singleton pi), vars, ann1)
-
-
-In de case bij de list:  is het de bedoeling dat x1 gelijk moet zijn aan e1 en x2 gelijk aan e2. 
-case e0 of Cons (x,x2) => e1 or e2
+w (env, A.Nil pi) vars ann	= do 
+                        let (a1, vars1) = freshVar "nil" vars
+                        let (b1, ann1) = freshAnn ann
+                        return (Cons (S.singleton pi) (SVar a1), Subst M.empty M.empty, M.singleton b1 (S.singleton pi), vars1, ann1)
 
 unionConstraints :: Constraint -> Constraint -> Constraint
 unionConstraints c1 c2 = M.foldWithKey unionConstraint c1 c2
@@ -221,7 +228,7 @@ insertConstraint v ans c = M.insert v ans c
 
 updateTyAnnVar :: AnnVar -> AnnVar -> SimpleTy -> SimpleTy
 updateTyAnnVar old new (SFunction t1 var t2) | old == var = SFunction (updateTyAnnVar old new t1) new (updateTyAnnVar old new t1)
-										     | otherwise = SFunction (updateTyAnnVar old new t1) var (updateTyAnnVar old new t1)
+										                         | otherwise = SFunction (updateTyAnnVar old new t1) var (updateTyAnnVar old new t1)
 updateTyAnnVar _ _ t = t
 
 substConstraint :: AnSubst -> Constraint -> Constraint
@@ -236,6 +243,7 @@ subst s SNat = SNat
 subst s (SFunction t1 x t2) = SFunction (subst s t1) x (subst s t2)
 subst s SBool = SBool
 subst s (SPair pi t1 t2) = SPair pi (subst s t1) (subst s t2)
+subst s (Cons pi t1) = Cons pi (subst s t1)
 
 check :: (Show a) => Maybe a -> String -> a
 check (Just a) _ = a
@@ -272,9 +280,6 @@ freshAnn xs | S.null xs = (0, S.singleton 0)
                           in (x, S.insert x xs)
 
 collectVarsExpr :: A.Expr -> S.Set TyVar
-collectVarsExpr (A.Integer x) = S.empty
-collectVarsExpr (A.Bool True) = S.empty
-collectVarsExpr (A.Bool False) = S.empty
 collectVarsExpr (A.Var x) = S.singleton x
 collectVarsExpr (A.Fn pi x e0) = S.insert x (collectVarsExpr e0)
 collectVarsExpr (A.Fun pi f x e0) = S.insert x (collectVarsExpr e0)
@@ -282,9 +287,11 @@ collectVarsExpr (A.App e1 e2) = collectVarsExpr e1 `S.union` collectVarsExpr e2
 collectVarsExpr (A.Let x e1 e2) = (S.insert x $ collectVarsExpr e1) `S.union` collectVarsExpr e2
 collectVarsExpr (A.ITE e1 e2 e3) = collectVarsExpr e1 `S.union` collectVarsExpr e2 `S.union` collectVarsExpr e3
 collectVarsExpr (A.Oper op e1 e2) = collectVarsExpr e1 `S.union` collectVarsExpr e2
-collectVarsExpr (A.PCase e1 x y e2) = collectVarsExpr e1 `S.union` S.singleton x `S.union` S.singleton x `S.union` collectVarsExpr e2
+collectVarsExpr (A.PCase e1 x y e2) = collectVarsExpr e1 `S.union` S.singleton x `S.union` S.singleton y `S.union` collectVarsExpr e2
 collectVarsExpr (A.Pair pi e1 e2) = collectVarsExpr e1 `S.union` collectVarsExpr e2
-
+collectVarsExpr (A.Cons pi e1 e2) = collectVarsExpr e1 `S.union` collectVarsExpr e2
+collectVarsExpr (A.Case e1 x y e2 e3) =  (collectVarsExpr e1) `S.union` collectVarsExpr e2 `S.union` collectVarsExpr e3
+collectVarsExpr e = S.empty
 
 collectVarsTy :: SimpleTy -> S.Set String
 collectVarsTy (SVar x) = S.singleton x
@@ -292,6 +299,7 @@ collectVarsTy SBool = S.empty
 collectVarsTy SNat = S.empty
 collectVarsTy (SFunction t1 a t2) = (collectVarsTy t1) `S.union` (collectVarsTy t2)
 collectVarsTy (SPair pi t1 t2) = (collectVarsTy t1) `S.union` (collectVarsTy t2)
+collectVarsTy (Cons pi e1) = collectVarsTy e1
 
 collectAnnotationsCons :: A.Expr -> Annotations
 collectAnnotationsCons (A.Fn pi x e0) 	     = collectAnnotationsCons e0
@@ -302,7 +310,6 @@ collectAnnotationsCons (A.ITE e1 e2 e3)      = collectAnnotationsCons e1 `S.unio
 collectAnnotationsCons (A.Oper op e1 e2)     = collectAnnotationsCons e1 `S.union` collectAnnotationsCons e2
 collectAnnotationsCons (A.PCase e1 x y e2)   = collectAnnotationsCons e1 `S.union` collectAnnotationsCons e2
 collectAnnotationsCons (A.Pair pi e1 e2) 	 = collectAnnotationsCons e1 `S.union` collectAnnotationsCons e2
-collectAnnotationsCons (A.PCase e1 x y e2)   = (collectAnnotationsCons e1) `S.union` (collectAnnotationsCons e2)
 collectAnnotationsCons (A.Case e1 x y e2 e3) = (collectAnnotationsCons e1) `S.union` (collectAnnotationsCons e2) `S.union` (collectAnnotationsCons e3)
 collectAnnotationsCons (A.Cons  pi e1 e2)	 = S.singleton pi `S.union` (collectAnnotationsCons e1) `S.union` (collectAnnotationsCons e2)
 collectAnnotationsCons (A.Nil pi)			 = S.singleton pi

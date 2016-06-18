@@ -25,8 +25,8 @@ parse :: String -> IO ()
 parse programName = do
   let fileName = "../examples/" ++ programName++".fun"
   content <- readFile fileName
-  putStrLn $ show (fst $ adjustAnnotation (parseExpr content, S.empty))
-  --runAlgorithm $ parseExpr content
+  --putStrLn $ show (fst $ adjustAnnotation (parseExpr content, S.empty))
+  runAlgorithm $ parseExpr content
 
 runAlgorithm :: Expr -> IO ()
 runAlgorithm e =  do

@@ -12,5 +12,5 @@ instance View A.Ty where
 
 instance View A.SimpleTy where
 	view (A.SVar x) = x
-	view (A.SFunction t1 pi t2) = (view t1) ++ "->" ++ (view t2)
+	view (A.SFunction t1 pi t2) = (view t1) ++ " " ++ show pi ++ " ->" ++ (view t2)
 	view x = show x
