@@ -17,24 +17,11 @@ data SimpleTyScheme =
 		| SForall TyVar SimpleTyScheme
 	    deriving (Show, Ord,Eq)
 
-data Ty = 
-		  Var TyVar
-		| Nat
-		| Bool
-		| Function Ty Pi Ty
-		deriving (Show, Ord,Eq)
-
-data TyScheme = 
-		  Tys Ty
-		| Forall [TyVar] TyScheme
-	    deriving (Show, Ord,Eq)
-
 data Subst = Subst TySubst AnSubst deriving (Show, Ord,Eq)
 
 type TyVar = String
 type TySubst = M.Map TyVar SimpleTy
 type AnSubst = M.Map Integer Integer
-type TyEnv =  M.Map String TyScheme
 type SimpleTyEnv = M.Map TyVar SimpleTyScheme
 type AnnVar = Integer
 type Annotations = S.Set AnnVar

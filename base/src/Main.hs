@@ -11,6 +11,7 @@ import Parsing
 import Algorithm
 import qualified Data.Set as S
 import qualified Data.Map as M
+import qualified Collect as C
 import View
   
  
@@ -30,8 +31,8 @@ parse programName = do
 
 runAlgorithm :: Expr -> IO ()
 runAlgorithm e =  do
-            let (newExpr, annotation) = adjustAnnotation (e,S.empty)
-            (ty,subst,constraint,vars,ann) <- w (M.empty, newExpr) (collectVarsExpr e) annotation
+            let (newExpr, annotation) = C.adjustAnnotation (e,S.empty)
+            (ty,subst,constraint,vars,ann) <- w (M.empty, newExpr) (C.collectVarsExpr e) annotation
             putStrLn $ "Parsed code: " ++ show newExpr
             putStrLn $ "Type: " ++ (view ty)
             putStrLn $ "Constraint: " ++ (show constraint)
