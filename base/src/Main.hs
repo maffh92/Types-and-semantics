@@ -33,7 +33,6 @@ runAlgorithm :: Expr -> IO ()
 runAlgorithm e =  do
             let (newExpr, annotation) = C.adjustAnnotation (e,S.empty)
             (ty,subst,constraint,vars,ann) <- w (M.empty, newExpr) (C.collectVarsExpr e) annotation
-            putStrLn $ "Parsed code: " ++ show newExpr
+            putStrLn $ "Parsed code: " ++ show newExpr ++ "\n"
             putStrLn $ "Type: " ++ (view ty)
-            putStrLn $ "Constraint: " ++ (show constraint)
-            putStrLn $ "Total annotation " ++ (show ann)
+            putStrLn $ "Constraint: " ++ (printConstraints constraint)

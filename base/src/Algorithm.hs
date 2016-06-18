@@ -168,7 +168,6 @@ w (env, A.PCase t1 x y t2) vars ann = do
                                 (a2, vars2) = freshVar "case" vars1
                                 env1 = M.insert x (STys (SVar a1)) $ M.insert y (STys (SVar a2)) env --Inserted x and y, such that it can be later used to check if the unifcation is correct.
                             (ty1, s1@(Subst st1 sa1), c1, vars3 , ann1) <- w (env, t1) vars2 ann
-                            putStrLn $ "Env1: " ++ show st1
                             (ty2, s2@(Subst st2 sa2), c2, vars4, ann2) <- w (mapEnv st1 env1, t2) vars3 ann1
                             let (b1, ann3) = freshAnn ann2
                                 s3@(Subst st3 sa3) = u (subst st2 $ subst st1 ty1, SPair b1 (SVar a1) (SVar a2)) ann

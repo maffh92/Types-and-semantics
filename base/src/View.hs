@@ -1,6 +1,12 @@
 module View where
 
 import qualified AnalyseSyntax as A
+import qualified Data.Map as M
+import qualified Data.Set as S
+
+printConstraints :: A.Constraint -> String
+printConstraints xs = M.foldrWithKey (\k a b -> ((show k)  ++ "Superset of " ++ (show $ S.toList a) ++ " ") ++ b) "" xs
+
 
 class View a where
 	view :: a -> String
